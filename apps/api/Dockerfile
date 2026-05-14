@@ -26,4 +26,5 @@ RUN mkdir -p sessions logs data
 
 EXPOSE 3333
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]
+# Schema ja esta sincronizado no Supabase - so inicia o servidor
+CMD ["node", "dist/server.js"]

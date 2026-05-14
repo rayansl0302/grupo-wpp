@@ -76,8 +76,9 @@ async function bootstrap() {
   // Carrega agendamentos das campanhas ativas
   await schedulerService.loadActiveCampaigns();
 
-  app.listen(env.PORT, () => {
-    logger.info(`🚀 API rodando em http://localhost:${env.PORT}`);
+  // 0.0.0.0 e necessario pro Railway/Docker (nao usar localhost)
+  app.listen(env.PORT, '0.0.0.0', () => {
+    logger.info(`API rodando na porta ${env.PORT}`);
   });
 }
 
