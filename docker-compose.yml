@@ -1,0 +1,61 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: wpp_bot_api
+    restart: unless-stopped
+    ports:
+      - '3333:3333'
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./apps/api/sessions:/app/sessions
+      - ./apps/api/logs:/app/logs
+      - wpp_db:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - wpp_network
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: wpp_bot_dashboard
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    depends_on:
+      - api
+    networks:
+      - wpp_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: wpp_bot_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - wpp_network
+
+volumes:
+  wpp_db:
+  redis_data:
+
+networks:
+  wpp_network:
+    driver: bridge

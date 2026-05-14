@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── WhatsApp Sessions ────────────────────────────────────────────────────────
+
+model WhatsAppSession {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("disconnected") // connected | disconnected | qr_pending
+  phoneNumber String?
+  qrCode      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  groups    WhatsAppGroup[]
+  sentPosts SentPost[]
+}
+
+// ─── WhatsApp Groups / Channels ───────────────────────────────────────────────
+
+model WhatsAppGroup {
+  id          String   @id @default(uuid())
+  jid         String   // WhatsApp JID (ex: 120363xxxxxxxx@g.us)
+  name        String
+  active      Boolean  @default(true)
+  dailyLimit  Int      @default(10)
+  sessionId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session   WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  campaigns CampaignGroup[]
+  sentPosts SentPost[]
+
+  @@unique([jid, sessionId])
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+
+model Product {
+  id            String   @id @default(uuid())
+  mlId          String   @unique  // ID do produto no ML
+  title         String
+  originalPrice Float?
+  salePrice     Float
+  discount      Int?     // percentual
+  thumbnail     String?
+  permalink     String
+  affiliateUrl  String?
+  freeShipping  Boolean  @default(false)
+  category      String?
+  seller        String?
+  rating        Float?
+  soldCount     Int?
+  fetchedAt     DateTime @default(now())
+
+  sentPosts SentPost[]
+}
+
+// ─── Campaigns ────────────────────────────────────────────────────────────────
+
+model Campaign {
+  id           String   @id @default(uuid())
+  name         String
+  active       Boolean  @default(true)
+  keywords     String   // JSON array serializado
+  categories   String   // JSON array serializado
+  minDiscount  Int      @default(0)
+  maxPrice     Float?
+  minPrice     Float?
+  freeShipping Boolean  @default(false)
+  cronExpr     String   @default("0 */2 * * *") // a cada 2h
+  templateType String   @default("standard")   // standard | hype | minimal
+  useAI        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groups    CampaignGroup[]
+  sentPosts SentPost[]
+  schedules Schedule[]
+}
+
+model CampaignGroup {
+  campaignId String
+  groupId    String
+
+  campaign Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  group    WhatsAppGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, groupId])
+}
+
+// ─── Schedules ────────────────────────────────────────────────────────────────
+
+model Schedule {
+  id         String   @id @default(uuid())
+  campaignId String
+  runAt      DateTime
+  status     String   @default("pending") // pending | running | done | failed
+  createdAt  DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+// ─── Sent Posts (log + dedup) ─────────────────────────────────────────────────
+
+model SentPost {
+  id         String   @id @default(uuid())
+  productId  String
+  groupId    String
+  campaignId String
+  sessionId  String
+  message    String
+  sentAt     DateTime @default(now())
+  status     String   @default("sent") // sent | failed
+  error      String?
+  clicks     Int      @default(0)
+
+  product  Product         @relation(fields: [productId], references: [id])
+  group    WhatsAppGroup   @relation(fields: [groupId], references: [id])
+  campaign Campaign        @relation(fields: [campaignId], references: [id])
+  session  WhatsAppSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([productId, groupId])
+}
