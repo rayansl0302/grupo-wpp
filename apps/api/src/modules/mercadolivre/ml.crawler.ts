@@ -1,10 +1,5 @@
-import { chromium } from 'playwright-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import type { Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import type { MLNormalizedProduct, MLSearchParams } from './ml.types';
-
-// Aplica stealth (esconde sinais de automation)
-chromium.use(StealthPlugin() as never);
 
 const PROXY = process.env.PROXY_USERNAME
   ? {
@@ -17,10 +12,19 @@ const PROXY = process.env.PROXY_USERNAME
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+// Browser lazy (so inicia quando precisar)
 let browser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
-  if (browser && browser.isConnected()) return browser;
+  if (browser) {
+    try {
+      // Verifica se ainda esta conectado
+      browser.contexts();
+      return browser;
+    } catch {
+      browser = null;
+    }
+  }
 
   console.log(`[CRAWLER] Iniciando Chromium ${PROXY ? '(com proxy BR)' : '(sem proxy)'}`);
   browser = await chromium.launch({
@@ -31,6 +35,7 @@ async function getBrowser(): Promise<Browser> {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
     ],
   });
   return browser;
@@ -45,53 +50,58 @@ async function newPage(): Promise<{ page: Page; context: BrowserContext }> {
     timezoneId: 'America/Sao_Paulo',
   });
 
-  // Bloqueia imagens, fontes e media pra economizar banda do proxy
+  // Stealth manual: remove flags de automation
+  await context.addInitScript(() => {
+    // navigator.webdriver = false
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // navigator.languages
+    Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
+    // navigator.plugins length > 0
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    // Chrome runtime
+    (window as any).chrome = { runtime: {} };
+  });
+
+  // Bloqueia imagens/fontes pra economizar banda do proxy
   await context.route('**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,mp4,webm}', (route) => route.abort());
 
   const page = await context.newPage();
   return { page, context };
 }
 
-/**
- * Busca produtos no ML usando navegacao real via Playwright + proxy residencial BR.
- * Acessa a pagina de busca por keyword.
- */
 export async function crawlSearch(params: MLSearchParams): Promise<MLNormalizedProduct[]> {
   const query = (params.query || '').trim();
   if (!query) return [];
 
   const slug = encodeURIComponent(query).replace(/%20/g, '-');
-  const url = `https://lista.mercadolivre.com.br/${slug}`;
-
-  return crawlUrl(url, params);
+  return crawlUrl(`https://lista.mercadolivre.com.br/${slug}`, params);
 }
 
-/**
- * Busca ofertas relampago - geralmente menos protegido que a busca.
- */
 export async function crawlOffers(params: MLSearchParams = {}): Promise<MLNormalizedProduct[]> {
   return crawlUrl('https://www.mercadolivre.com.br/ofertas', params);
 }
 
 async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormalizedProduct[]> {
-  const { page, context } = await newPage();
+  let context: BrowserContext | null = null;
   const t0 = Date.now();
 
   try {
+    const result = await newPage();
+    context = result.context;
+    const { page } = result;
+
     console.log(`[CRAWLER] GET ${url}`);
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
     console.log(`[CRAWLER] Status: ${response?.status()} em ${Date.now() - t0}ms`);
 
-    // Espera o conteudo carregar (cards de produto)
     await page
       .waitForSelector('.poly-card, .ui-search-result__wrapper, .promotion-item', { timeout: 15_000 })
       .catch(() => console.log('[CRAWLER] Selector nao encontrado, tentando extrair mesmo assim'));
 
-    // Pega o HTML pra parsing
     const html = await page.content();
     console.log(`[CRAWLER] HTML: ${html.length} bytes`);
 
-    const products = await page.evaluate(() => {
+    const products: any[] = await page.evaluate(() => {
       const items: any[] = [];
 
       // Estrategia 1: JSON-LD
@@ -124,7 +134,7 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
 
       if (items.length > 0) return items;
 
-      // Estrategia 2: parse direto dos cards
+      // Estrategia 2: cards HTML
       const cards = document.querySelectorAll(
         '.poly-card, .ui-search-result__wrapper, li.ui-search-layout__item, .promotion-item',
       );
@@ -157,7 +167,6 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
           const discount = originalPrice && originalPrice > salePrice
             ? Math.round(((originalPrice - salePrice) / originalPrice) * 100)
             : null;
-
           const freeShipping = (el.textContent || '').toLowerCase().includes('frete gr');
           const mlIdMatch = link.match(/MLB-?(\d+)/);
 
@@ -181,9 +190,8 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
 
     console.log(`[CRAWLER] Extraidos: ${products.length} produtos`);
 
-    // Aplica filtros do params
     const filtered = products
-      .map((p: any) => ({
+      .map((p) => ({
         mlId: p.mlId,
         title: p.title,
         salePrice: p.salePrice,
@@ -212,12 +220,11 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
     console.error(`[CRAWLER] Erro: ${err?.message}`);
     return [];
   } finally {
-    await context.close().catch(() => {});
+    await context?.close().catch(() => {});
   }
 }
 
-// Cleanup do browser ao encerrar
 process.on('SIGINT', async () => {
-  await browser?.close();
+  await browser?.close().catch(() => {});
   process.exit(0);
 });
