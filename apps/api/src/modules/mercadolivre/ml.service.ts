@@ -249,11 +249,24 @@ export class MercadoLivreService {
     query.sort = sortMap[params.sortBy ?? 'relevance'] ?? 'relevance';
 
     const token = await this.getAccessToken();
-    const res = await this.http.get<{ results: MLSearchResult[] }>('/sites/MLB/search', {
-      params: query,
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data.results;
+    // Adiciona token nos query params TAMBEM (alguns endpoints do ML aceitam assim)
+    query.access_token = token;
+
+    console.log(`[ML-API] GET /sites/${this.siteId}/search com query:`, Object.keys(query).join(','));
+
+    try {
+      const res = await this.http.get<{ results: MLSearchResult[] }>(`/sites/${this.siteId}/search`, {
+        params: query,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Tracking-Id': 'wpp-bot/1.0',
+        },
+      });
+      return res.data.results;
+    } catch (err: any) {
+      console.error('[ML-API] erro:', err?.response?.status, JSON.stringify(err?.response?.data).slice(0, 300));
+      throw err;
+    }
   }
 
   private normalize(item: MLSearchResult): MLNormalizedProduct {
