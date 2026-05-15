@@ -150,6 +150,19 @@ campaignRouter.get('/test-search', async (req, res) => {
   }
 });
 
+// POST /campaigns/:id/test - envia 1 produto aleatorio pra teste rapido
+campaignRouter.post('/:id/test', async (req, res) => {
+  try {
+    console.log(`[CAMPAIGN-TEST] Iniciando teste: ${req.params.id}`);
+    const result = await campaignService.runCampaignTest(req.params.id);
+    console.log('[CAMPAIGN-TEST] Resultado:', result);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[CAMPAIGN-TEST] Erro:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /campaigns/:id/run - executa manualmente com diagnostico
 campaignRouter.post('/:id/run', async (req, res) => {
   console.log(`\n[CAMPAIGN] Execucao manual iniciada: ${req.params.id}`);

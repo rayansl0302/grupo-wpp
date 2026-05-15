@@ -44,6 +44,83 @@ export class CampaignService {
     return { sent: totalSent, failed: totalFailed };
   }
 
+  /**
+   * Modo TESTE: envia apenas 1 produto aleatorio (ignora dailyLimit e horario ativo).
+   */
+  async runCampaignTest(campaignId: string): Promise<{ sent: number; failed: number; product?: string }> {
+    const campaign = await prisma.campaign.findUniqueOrThrow({
+      where: { id: campaignId },
+      include: { groups: { include: { group: { include: { session: true } } } } },
+    });
+
+    const keywords: string[] = JSON.parse(campaign.keywords || '[]');
+    const keyword = keywords[Math.floor(Math.random() * keywords.length)] ?? '';
+
+    const activeGroups = campaign.groups
+      .map((cg) => cg.group)
+      .filter((g) => g.session.status === 'connected');
+
+    if (activeGroups.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    const group = activeGroups[0]; // envia so no primeiro grupo elegivel
+
+    // Busca 1 produto
+    const { productService } = await import('../products/product.service');
+    const { buildMessage } = await import('../../shared/templates/message.template');
+    const { whatsappService } = await import('../whatsapp/whatsapp.service');
+
+    const products = await productService.fetchAndFilter(
+      {
+        query: keyword,
+        minDiscount: campaign.minDiscount,
+        maxPrice: campaign.maxPrice ?? undefined,
+        minPrice: campaign.minPrice ?? undefined,
+        freeShipping: campaign.freeShipping,
+        limit: 1,
+      },
+      group.id,
+    );
+
+    if (products.length === 0) return { sent: 0, failed: 0 };
+    const product = products[0];
+
+    const affiliateUrl = product.affiliateUrl ?? product.permalink;
+    const message = buildMessage(product, affiliateUrl, campaign.templateType as TemplateType);
+
+    try {
+      if (product.thumbnail) {
+        await whatsappService.sendImageWithCaption(
+          group.session.name,
+          group.jid,
+          product.thumbnail,
+          message,
+        );
+      } else {
+        await whatsappService.sendText(group.session.name, group.jid, message);
+      }
+
+      await prisma.sentPost.upsert({
+        where: { productId_groupId: { productId: product.id, groupId: group.id } },
+        update: { message, status: 'sent', sentAt: new Date(), error: null },
+        create: {
+          productId: product.id,
+          groupId: group.id,
+          campaignId: campaign.id,
+          sessionId: group.sessionId,
+          message,
+          status: 'sent',
+        },
+      });
+
+      return { sent: 1, failed: 0, product: product.title };
+    } catch (err) {
+      logger.error({ err }, '[TEST] Falha ao enviar produto teste');
+      return { sent: 0, failed: 1 };
+    }
+  }
+
   private async sendToGroup(
     campaign: Campaign,
     group: WhatsAppGroup & { session: { name: string } },

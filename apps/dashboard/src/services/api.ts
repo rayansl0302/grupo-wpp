@@ -81,6 +81,7 @@ export const campaignApi = {
     api.patch<Campaign>(`/campaigns/${id}`, data),
   toggle: (id: string) => api.patch<Campaign>(`/campaigns/${id}/toggle`),
   run: (id: string) => api.post(`/campaigns/${id}/run`),
+  test: (id: string) => api.post<{ sent: number; failed: number; product?: string }>(`/campaigns/${id}/test`),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
 };
 

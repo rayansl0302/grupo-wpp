@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Pause, Trash2, PlayCircle, Plus, Pencil } from 'lucide-react';
+import { Play, Pause, Trash2, PlayCircle, Plus, Pencil, FlaskConical } from 'lucide-react';
 import { campaignApi, groupApi, type Campaign, type Group } from '../services/api';
 
 const CRON_OPTIONS: { value: string; label: string; hint?: string }[] = [
@@ -65,6 +65,23 @@ export default function Campaigns() {
     try {
       const { data } = await campaignApi.run(id);
       setRunResult({ campaignId: id, data });
+    } catch (err: any) {
+      setRunResult({
+        campaignId: id,
+        data: { error: err?.response?.data?.error || err?.message || 'Erro desconhecido' },
+      });
+    } finally {
+      setRunning(null);
+      load();
+    }
+  };
+
+  const handleTest = async (id: string) => {
+    setRunning(id);
+    setRunResult(null);
+    try {
+      const { data } = await campaignApi.test(id);
+      setRunResult({ campaignId: id, data: { ...data, test: true } });
     } catch (err: any) {
       setRunResult({
         campaignId: id,
@@ -288,7 +305,13 @@ export default function Campaigns() {
           {runResult.data?.warning && <p className="text-yellow-300 text-xs mb-2">{runResult.data.warning}</p>}
           {typeof runResult.data?.sent === 'number' && (
             <p className="text-xs text-gray-300">
+              {runResult.data.test ? '🧪 Teste: ' : ''}
               Enviados: <strong>{runResult.data.sent}</strong> | Falhas: <strong>{runResult.data.failed}</strong>
+            </p>
+          )}
+          {runResult.data?.product && (
+            <p className="text-xs text-gray-400 mt-1">
+              📦 Produto enviado: <strong>{runResult.data.product}</strong>
             </p>
           )}
           {runResult.data?.productSearch && (
@@ -321,8 +344,12 @@ export default function Campaigns() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button onClick={() => handleTest(c.id)} disabled={running === c.id}
+                className="btn-ghost p-2 text-yellow-400 hover:text-yellow-300" title="Enviar 1 produto (teste rapido)">
+                <FlaskConical size={16} className={running === c.id ? 'animate-pulse' : ''} />
+              </button>
               <button onClick={() => handleRun(c.id)} disabled={running === c.id}
-                className="btn-ghost p-2" title="Executar agora">
+                className="btn-ghost p-2" title="Executar agora (envia varios)">
                 <PlayCircle size={16} className={running === c.id ? 'text-brand-500 animate-pulse' : ''} />
               </button>
               <button onClick={() => handleEdit(c)} className="btn-ghost p-2 text-blue-400 hover:text-blue-300" title="Editar">
