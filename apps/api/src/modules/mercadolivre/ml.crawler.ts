@@ -12,22 +12,10 @@ const PROXY = process.env.PROXY_USERNAME
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// Browser lazy (so inicia quando precisar)
-let browser: Browser | null = null;
-
+// Cria browser novo por request (evita ERR_PROXY_AUTH_UNSUPPORTED em chamadas subsequentes)
 async function getBrowser(): Promise<Browser> {
-  if (browser) {
-    try {
-      // Verifica se ainda esta conectado
-      browser.contexts();
-      return browser;
-    } catch {
-      browser = null;
-    }
-  }
-
   console.log(`[CRAWLER] Iniciando Chromium ${PROXY ? '(com proxy BR)' : '(sem proxy)'}`);
-  browser = await chromium.launch({
+  return chromium.launch({
     headless: true,
     proxy: PROXY,
     args: [
@@ -38,36 +26,10 @@ async function getBrowser(): Promise<Browser> {
       '--disable-features=IsolateOrigins,site-per-process',
     ],
   });
-  return browser;
 }
 
-async function newPage(): Promise<{ page: Page; context: BrowserContext }> {
-  const b = await getBrowser();
-  const context = await b.newContext({
-    userAgent: USER_AGENT,
-    viewport: { width: 1920, height: 1080 },
-    locale: 'pt-BR',
-    timezoneId: 'America/Sao_Paulo',
-  });
-
-  // Stealth manual: remove flags de automation
-  await context.addInitScript(() => {
-    // navigator.webdriver = false
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    // navigator.languages
-    Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
-    // navigator.plugins length > 0
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    // Chrome runtime
-    (window as any).chrome = { runtime: {} };
-  });
-
-  // Bloqueia imagens/fontes pra economizar banda do proxy
-  await context.route('**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,mp4,webm}', (route) => route.abort());
-
-  const page = await context.newPage();
-  return { page, context };
-}
+// Regex que aceita MLB123, MLB-123, MLBU123, MLBA123 (qualquer letra A-Z opcional apos MLB)
+const MLB_ID_REGEX = /MLB[A-Z]?-?\d{5,}/i;
 
 export async function crawlSearch(params: MLSearchParams): Promise<MLNormalizedProduct[]> {
   const query = (params.query || '').trim();
@@ -83,12 +45,26 @@ export async function crawlOffers(params: MLSearchParams = {}): Promise<MLNormal
 
 async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormalizedProduct[]> {
   let context: BrowserContext | null = null;
+  let browser: Browser | null = null;
   const t0 = Date.now();
 
   try {
-    const result = await newPage();
-    context = result.context;
-    const { page } = result;
+    browser = await getBrowser();
+    const ctx = await browser.newContext({
+      userAgent: USER_AGENT,
+      viewport: { width: 1920, height: 1080 },
+      locale: 'pt-BR',
+      timezoneId: 'America/Sao_Paulo',
+    });
+    await ctx.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      (window as any).chrome = { runtime: {} };
+    });
+    await ctx.route('**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,mp4,webm}', (route) => route.abort());
+    context = ctx;
+    const page = await ctx.newPage();
 
     console.log(`[CRAWLER] GET ${url}`);
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
@@ -190,9 +166,13 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
 
     console.log(`[CRAWLER] Extraidos: ${products.length} produtos`);
 
-    // Filtra produtos com URL invalida (sem MLB-id)
+    // Filtra produtos com URL invalida (sem MLB-id, ou link de tracking click1)
     const withValidUrl = products.filter((p) => {
-      const valid = p.permalink && /MLB-?\d+/.test(p.permalink) && p.permalink.startsWith('http');
+      if (!p.permalink || !p.permalink.startsWith('http')) return false;
+      // Descarta links de tracking de publicidade
+      if (p.permalink.includes('click1.mercadolivre.com.br')) return false;
+      // Aceita /p/MLB..., /up/MLBU..., MLB-..., etc
+      const valid = MLB_ID_REGEX.test(p.permalink);
       if (!valid) {
         console.log(`[CRAWLER] descartado URL invalida: "${p.title?.slice(0, 50)}" -> ${p.permalink}`);
       }
@@ -235,6 +215,7 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
     return [];
   } finally {
     await context?.close().catch(() => {});
+    await browser?.close().catch(() => {});
   }
 }
 

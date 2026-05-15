@@ -344,8 +344,8 @@ export class MercadoLivreService {
   buildAffiliateUrl(permalink: string): string {
     if (!permalink || !this.affiliateId) return permalink;
 
-    // Valida que e uma URL real do ML com produto (MLB-XXX ou /p/MLB-XXX)
-    if (!/MLB-?\d+/.test(permalink)) {
+    // Valida que e uma URL real do ML com produto (MLB123, MLB-123, MLBU123, etc)
+    if (!/MLB[A-Z]?-?\d{5,}/i.test(permalink)) {
       console.warn(`[ML] URL invalida (sem MLB-id): ${permalink}`);
       return permalink;
     }
