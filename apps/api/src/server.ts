@@ -16,11 +16,12 @@ async function bootstrap() {
   const app = express();
 
   // ─── Middlewares globais ─────────────────────────────────────────────────────
-  // CORS: aceita qualquer origem em dev; em prod usa CORS_ORIGIN do .env (separar por virgula)
-  const corsOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-    : '*';
-  app.use(cors({ origin: corsOrigins, credentials: true }));
+  // CORS: aceita qualquer origem por padrao (dev ou prod com "*"); pode restringir via CORS_ORIGIN
+  const corsEnv = (process.env.CORS_ORIGIN ?? '*').trim();
+  const corsConfig = corsEnv === '*'
+    ? { origin: true, credentials: false } // aceita qualquer origem (sem credentials, browser exige isso)
+    : { origin: corsEnv.split(',').map((s) => s.trim()), credentials: true };
+  app.use(cors(corsConfig));
   app.use(express.json());
   app.use(
     rateLimit({ windowMs: 60_000, max: 100, message: { error: 'Rate limit excedido' } }),
