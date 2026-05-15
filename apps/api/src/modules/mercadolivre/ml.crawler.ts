@@ -1,4 +1,4 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext } from 'playwright';
 import type { MLNormalizedProduct, MLSearchParams } from './ml.types';
 
 const PROXY = process.env.PROXY_USERNAME
@@ -219,7 +219,4 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
   }
 }
 
-process.on('SIGINT', async () => {
-  await browser?.close().catch(() => {});
-  process.exit(0);
-});
+// Browser e criado/fechado por request, nao precisa cleanup global
