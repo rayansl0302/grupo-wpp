@@ -61,6 +61,55 @@ campaignRouter.get('/:id', async (req, res) => {
   res.json(campaign);
 });
 
+// PATCH /campaigns/:id - atualiza campanha
+campaignRouter.patch('/:id', async (req, res) => {
+  try {
+    const partialSchema = campaignSchema.partial();
+    const data = partialSchema.parse(req.body);
+    const { groupIds, keywords, categories, ...rest } = data;
+
+    const updateData: any = { ...rest };
+    if (keywords !== undefined) updateData.keywords = JSON.stringify(keywords);
+    if (categories !== undefined) updateData.categories = JSON.stringify(categories);
+
+    // Se mandou groupIds, recria os vinculos
+    const ops: Promise<any>[] = [
+      prisma.campaign.update({ where: { id: req.params.id }, data: updateData }),
+    ];
+
+    if (groupIds !== undefined) {
+      ops.push(prisma.campaignGroup.deleteMany({ where: { campaignId: req.params.id } }));
+    }
+
+    await Promise.all(ops);
+
+    if (groupIds !== undefined && groupIds.length > 0) {
+      await prisma.campaignGroup.createMany({
+        data: groupIds.map((groupId) => ({ campaignId: req.params.id, groupId })),
+        skipDuplicates: true,
+      });
+    }
+
+    const campaign = await prisma.campaign.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { groups: { include: { group: { select: { name: true, jid: true } } } } },
+    });
+
+    // Reagenda o cron se mudou
+    if (rest.cronExpr) {
+      schedulerService.removeCampaign(req.params.id);
+      if (campaign.active) {
+        schedulerService.registerCampaign(req.params.id, campaign.cronExpr);
+      }
+    }
+
+    res.json(campaign);
+  } catch (err: any) {
+    console.error('[CAMPAIGN] erro update:', err);
+    res.status(400).json({ error: err.message, issues: err.issues });
+  }
+});
+
 // PATCH /campaigns/:id/toggle
 campaignRouter.patch('/:id/toggle', async (req, res) => {
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: req.params.id } });

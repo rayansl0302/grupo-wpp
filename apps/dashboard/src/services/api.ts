@@ -77,6 +77,8 @@ export const campaignApi = {
   list: () => api.get<Campaign[]>('/campaigns'),
   get: (id: string) => api.get<Campaign>(`/campaigns/${id}`),
   create: (data: Partial<Campaign> & { groupIds: string[] }) => api.post<Campaign>('/campaigns', data),
+  update: (id: string, data: Partial<Campaign> & { groupIds?: string[] }) =>
+    api.patch<Campaign>(`/campaigns/${id}`, data),
   toggle: (id: string) => api.patch<Campaign>(`/campaigns/${id}/toggle`),
   run: (id: string) => api.post(`/campaigns/${id}/run`),
   delete: (id: string) => api.delete(`/campaigns/${id}`),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Pause, Trash2, PlayCircle, Plus, Clock } from 'lucide-react';
+import { Play, Pause, Trash2, PlayCircle, Plus, Pencil } from 'lucide-react';
 import { campaignApi, groupApi, type Campaign, type Group } from '../services/api';
 
 function CronLabel({ expr }: { expr: string }) {
@@ -8,28 +8,33 @@ function CronLabel({ expr }: { expr: string }) {
     '0 9,12,18,21 * * *': '9h, 12h, 18h e 21h',
     '0 * * * *': 'Todo hora',
     '*/30 * * * *': 'A cada 30min',
+    '0 8,20 * * *': '8h e 20h',
   };
   return <span className="text-xs text-gray-500">{labels[expr] ?? expr}</span>;
 }
+
+const EMPTY_FORM = {
+  name: '',
+  keywords: '',
+  minDiscount: 0,
+  maxPrice: '',
+  freeShipping: false,
+  cronExpr: '0 */2 * * *',
+  templateType: 'standard' as Campaign['templateType'],
+  useAI: false,
+  groupIds: [] as string[],
+};
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
-
-  // Form state
-  const [form, setForm] = useState({
-    name: '',
-    keywords: '',
-    minDiscount: 0,
-    maxPrice: '',
-    freeShipping: false,
-    cronExpr: '0 */2 * * *',
-    templateType: 'standard' as Campaign['templateType'],
-    useAI: false,
-    groupIds: [] as string[],
-  });
+  const [runResult, setRunResult] = useState<{ campaignId: string; data: any } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const load = async () => {
     const [cRes, gRes] = await Promise.all([campaignApi.list(), groupApi.list()]);
@@ -39,12 +44,8 @@ export default function Campaigns() {
 
   useEffect(() => { load(); }, []);
 
-  const handleToggle = async (id: string) => {
-    await campaignApi.toggle(id);
-    load();
-  };
-
-  const [runResult, setRunResult] = useState<{ campaignId: string; data: any } | null>(null);
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+  const handleToggle = async (id: string) => { await campaignApi.toggle(id); load(); };
 
   const handleRun = async (id: string) => {
     setRunning(id);
@@ -69,32 +70,64 @@ export default function Campaigns() {
     load();
   };
 
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // ─── Abrir form (novo OU edicao) ──────────────────────────────────────────
+  const handleNew = () => {
+    load();
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormError(null);
+    setShowForm(true);
+  };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-    setCreateError(null);
+  const handleEdit = (c: Campaign) => {
+    load();
+    let parsedKeywords: string[] = [];
     try {
-      await campaignApi.create({
+      parsedKeywords = JSON.parse(c.keywords || '[]');
+    } catch {
+      parsedKeywords = (c.keywords || '').split(',').map(s => s.trim()).filter(Boolean);
+    }
+    setForm({
+      name: c.name,
+      keywords: parsedKeywords.join(','),
+      minDiscount: c.minDiscount,
+      maxPrice: (c as any).maxPrice ? String((c as any).maxPrice) : '',
+      freeShipping: c.freeShipping,
+      cronExpr: c.cronExpr,
+      templateType: c.templateType as Campaign['templateType'],
+      useAI: c.useAI,
+      groupIds: c.groups?.map((cg: any) => cg.groupId ?? cg.group?.id).filter(Boolean) ?? [],
+    });
+    setEditingId(c.id);
+    setFormError(null);
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+  };
+
+  // ─── Salvar (criar ou editar) ─────────────────────────────────────────────
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    try {
+      const payload = {
         ...form,
         keywords: form.keywords.split(',').map((k) => k.trim()).filter(Boolean) as never,
         categories: [] as never,
         maxPrice: form.maxPrice ? Number(form.maxPrice) : undefined,
-      });
-      setShowForm(false);
-      setForm({
-        name: '',
-        keywords: '',
-        minDiscount: 0,
-        maxPrice: '',
-        freeShipping: false,
-        cronExpr: '0 */2 * * *',
-        templateType: 'standard' as Campaign['templateType'],
-        useAI: false,
-        groupIds: [],
-      });
+      };
+      if (editingId) {
+        await campaignApi.update(editingId, payload);
+      } else {
+        await campaignApi.create(payload);
+      }
+      handleCloseForm();
       load();
     } catch (err: any) {
       const status = err?.response?.status;
@@ -105,17 +138,11 @@ export default function Campaigns() {
         || (data && JSON.stringify(data))
         || err?.message
         || 'Erro desconhecido';
-      setCreateError(`[${status ?? 'sem status'}] ${msg}`);
-      console.error('Erro ao criar campanha:', { status, data, err });
+      setFormError(`[${status ?? 'sem status'}] ${msg}`);
+      console.error('Erro ao salvar campanha:', { status, data, err });
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
-  };
-
-  const handleOpenForm = () => {
-    load();
-    setShowForm(true);
-    setCreateError(null);
   };
 
   return (
@@ -125,34 +152,36 @@ export default function Campaigns() {
           <h1 className="text-xl font-bold text-white">Campanhas</h1>
           <p className="text-sm text-gray-500 mt-0.5">{campaigns.length} campanhas cadastradas</p>
         </div>
-        <button onClick={() => showForm ? setShowForm(false) : handleOpenForm()} className="btn-primary flex items-center gap-2">
+        <button onClick={showForm ? handleCloseForm : handleNew} className="btn-primary flex items-center gap-2">
           <Plus size={15} />
-          Nova campanha
+          {showForm ? 'Fechar' : 'Nova campanha'}
         </button>
       </div>
 
-      {/* Formulário inline */}
+      {/* Form (criar OU editar) */}
       {showForm && (
         <div className="card">
-          <h2 className="font-semibold mb-4">Nova campanha</h2>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h2 className="font-semibold mb-4">
+            {editingId ? 'Editar campanha' : 'Nova campanha'}
+          </h2>
+          <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Nome da campanha</label>
               <input className="input" required value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Palavras-chave (sep. por vírgula)</label>
+              <label className="block text-xs text-gray-400 mb-1.5">Palavras-chave (sep. por virgula)</label>
               <input className="input" placeholder="notebook, celular, fone" value={form.keywords}
                 onChange={(e) => setForm({ ...form, keywords: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Desconto mínimo (%)</label>
+              <label className="block text-xs text-gray-400 mb-1.5">Desconto minimo (%)</label>
               <input type="number" className="input" min={0} max={100} value={form.minDiscount}
                 onChange={(e) => setForm({ ...form, minDiscount: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Preço máximo (R$)</label>
+              <label className="block text-xs text-gray-400 mb-1.5">Preco maximo (R$)</label>
               <input type="number" className="input" placeholder="Ex: 500" value={form.maxPrice}
                 onChange={(e) => setForm({ ...form, maxPrice: e.target.value })} />
             </div>
@@ -164,6 +193,7 @@ export default function Campaigns() {
                 <option value="0 9,12,18,21 * * *">9h, 12h, 18h e 21h</option>
                 <option value="0 * * * *">Todo hora</option>
                 <option value="0 8,20 * * *">8h e 20h</option>
+                <option value="*/30 * * * *">A cada 30 min</option>
               </select>
             </div>
             <div>
@@ -176,14 +206,25 @@ export default function Campaigns() {
                 <option value="flash">Flash</option>
               </select>
             </div>
+            <div className="md:col-span-2 flex gap-4 items-center">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.freeShipping}
+                  onChange={(e) => setForm({ ...form, freeShipping: e.target.checked })} />
+                <span>Frete gratis</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form.useAI}
+                  onChange={(e) => setForm({ ...form, useAI: e.target.checked })} />
+                <span>Usar IA pra textos</span>
+              </label>
+            </div>
             <div className="md:col-span-2">
               <label className="block text-xs text-gray-400 mb-1.5">
                 Grupos {groups.length > 0 && <span className="text-gray-600">({groups.length} disponiveis)</span>}
               </label>
               {groups.length === 0 ? (
                 <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-3 text-xs text-yellow-200">
-                  Nenhum grupo cadastrado. Voce pode criar a campanha agora e vincular grupos depois,
-                  ou ir em <strong>Grupos</strong> e clicar em "Buscar grupos" primeiro.
+                  Nenhum grupo cadastrado. Vai em <strong>Grupos</strong> e clique em "Buscar grupos" primeiro.
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3">
@@ -204,23 +245,23 @@ export default function Campaigns() {
               )}
             </div>
 
-            {createError && (
+            {formError && (
               <div className="md:col-span-2 bg-red-900/20 border border-red-700/40 rounded-lg p-3 text-xs text-red-200">
-                <strong>Erro ao criar:</strong> {createError}
+                <strong>Erro:</strong> {formError}
               </div>
             )}
 
             <div className="md:col-span-2 flex gap-3">
-              <button type="submit" disabled={creating} className="btn-primary disabled:opacity-50">
-                {creating ? 'Criando...' : 'Criar campanha'}
+              <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
+                {saving ? 'Salvando...' : editingId ? 'Salvar alteracoes' : 'Criar campanha'}
               </button>
-              <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancelar</button>
+              <button type="button" onClick={handleCloseForm} className="btn-ghost">Cancelar</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Resultado da execucao manual */}
+      {/* Resultado da execucao */}
       {runResult && (
         <div className={`card border ${runResult.data?.error ? 'border-red-700/50 bg-red-900/10' : runResult.data?.warning ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-green-700/50 bg-green-900/10'}`}>
           <div className="flex items-start justify-between mb-2">
@@ -248,18 +289,10 @@ export default function Campaigns() {
               ))}
             </div>
           )}
-          {runResult.data?.diagnostics && (
-            <details className="mt-2">
-              <summary className="text-xs text-gray-500 cursor-pointer">Ver diagnostico completo</summary>
-              <pre className="text-[10px] text-gray-400 mt-1 bg-black/30 p-2 rounded overflow-x-auto">
-                {JSON.stringify(runResult.data.diagnostics, null, 2)}
-              </pre>
-            </details>
-          )}
         </div>
       )}
 
-      {/* Lista */}
+      {/* Lista de campanhas */}
       <div className="space-y-3">
         {campaigns.map((c) => (
           <div key={c.id} className="card flex items-center gap-4">
@@ -268,20 +301,18 @@ export default function Campaigns() {
               <p className="font-medium text-white truncate">{c.name}</p>
               <div className="flex items-center gap-3 mt-0.5">
                 <CronLabel expr={c.cronExpr} />
-                <span className="text-xs text-gray-500">
-                  {c._count?.sentPosts ?? 0} envios
-                </span>
+                <span className="text-xs text-gray-500">{c._count?.sentPosts ?? 0} envios</span>
                 <span className="text-xs text-gray-600">{c.templateType}</span>
+                <span className="text-xs text-gray-600">{c.groups?.length ?? 0} grupo(s)</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleRun(c.id)}
-                disabled={running === c.id}
-                className="btn-ghost p-2"
-                title="Executar agora"
-              >
+            <div className="flex items-center gap-1">
+              <button onClick={() => handleRun(c.id)} disabled={running === c.id}
+                className="btn-ghost p-2" title="Executar agora">
                 <PlayCircle size={16} className={running === c.id ? 'text-brand-500 animate-pulse' : ''} />
+              </button>
+              <button onClick={() => handleEdit(c)} className="btn-ghost p-2 text-blue-400 hover:text-blue-300" title="Editar">
+                <Pencil size={16} />
               </button>
               <button onClick={() => handleToggle(c.id)} className="btn-ghost p-2" title={c.active ? 'Pausar' : 'Ativar'}>
                 {c.active ? <Pause size={16} /> : <Play size={16} />}
