@@ -27,7 +27,10 @@ export class ProductService {
 
     for (const raw of rawProducts) {
       const affiliatePermalink = mlService.buildAffiliateUrl(raw.permalink);
+      console.log(`[PRODUCT] permalink original: ${raw.permalink}`);
+      console.log(`[PRODUCT] com matt_word: ${affiliatePermalink}`);
       const affiliateUrl = await shortenUrl(affiliatePermalink).catch(() => affiliatePermalink);
+      console.log(`[PRODUCT] final (encurtado): ${affiliateUrl}`);
 
       const product = await prisma.product.upsert({
         where: { mlId: raw.mlId },

@@ -90,6 +90,8 @@ export class CampaignService {
     for (const batch of batches) {
       for (const product of batch) {
         const affiliateUrl = product.affiliateUrl ?? product.permalink;
+        console.log(`[SEND] permalink: ${product.permalink}`);
+        console.log(`[SEND] affiliateUrl: ${affiliateUrl}`);
 
         let message: string;
         if (campaign.useAI) {
