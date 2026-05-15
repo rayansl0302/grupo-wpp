@@ -141,23 +141,39 @@ async function crawlUrl(url: string, params: MLSearchParams, retry = true): Prom
           const img = el.querySelector('img');
           const thumbnail = (img?.getAttribute('data-src') || img?.getAttribute('src') || '') as string;
 
-          const priceInt = el.querySelector(
-            '.poly-price__current .andes-money-amount__fraction, .ui-search-price__second-line .andes-money-amount__fraction, .andes-money-amount__fraction',
-          )?.textContent || '';
-          const priceCents = el.querySelector(
-            '.poly-price__current .andes-money-amount__cents, .ui-search-price__second-line .andes-money-amount__cents',
-          )?.textContent || '00';
-          const originalInt = el.querySelector(
-            '.poly-price__del .andes-money-amount__fraction, s.andes-money-amount__fraction',
-          )?.textContent || '';
+          // PRECO ATUAL: busca primeiro em containers especificos, evita pegar o riscado
+          const currentEl = el.querySelector(
+            '.poly-price__current, .ui-search-price__second-line, [class*="price__current"]',
+          ) || el.querySelector('.andes-money-amount:not(.andes-money-amount--previous):not(s)');
+
+          // PRECO ORIGINAL (riscado): especificamente dentro de del/s ou previous
+          const originalEl = el.querySelector(
+            '.poly-price__del, .andes-money-amount--previous, s',
+          );
+
+          const priceInt = currentEl?.querySelector('.andes-money-amount__fraction')?.textContent
+            || currentEl?.textContent?.match(/R\$\s*([\d.]+)/)?.[1]
+            || '';
+          const priceCents = currentEl?.querySelector('.andes-money-amount__cents')?.textContent || '00';
+          const originalInt = originalEl?.querySelector('.andes-money-amount__fraction')?.textContent
+            || originalEl?.textContent?.match(/R\$\s*([\d.]+)/)?.[1]
+            || '';
 
           const salePrice = parseFloat(
             `${priceInt.replace(/\D/g, '')}.${priceCents.replace(/\D/g, '').padEnd(2, '0').slice(0, 2)}`,
           );
           const originalPrice = originalInt ? parseFloat(originalInt.replace(/\D/g, '')) : null;
-          const discount = originalPrice && originalPrice > salePrice
-            ? Math.round(((originalPrice - salePrice) / originalPrice) * 100)
-            : null;
+
+          // Desconto: tenta pegar direto da badge "X% OFF" se houver
+          let discount: number | null = null;
+          const discountEl = el.querySelector('.andes-money-amount__discount, [class*="discount"]');
+          const discountText = discountEl?.textContent || '';
+          const discountMatch = discountText.match(/(\d+)\s*%/);
+          if (discountMatch) {
+            discount = parseInt(discountMatch[1], 10);
+          } else if (originalPrice && originalPrice > salePrice) {
+            discount = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+          }
           const freeShipping = (el.textContent || '').toLowerCase().includes('frete gr');
           const mlIdMatch = link.match(/MLB-?(\d+)/);
 
