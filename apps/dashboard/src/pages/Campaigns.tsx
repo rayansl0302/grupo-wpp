@@ -2,15 +2,26 @@ import { useEffect, useState } from 'react';
 import { Play, Pause, Trash2, PlayCircle, Plus, Pencil } from 'lucide-react';
 import { campaignApi, groupApi, type Campaign, type Group } from '../services/api';
 
+const CRON_OPTIONS: { value: string; label: string; hint?: string }[] = [
+  // Nichos com 2 horarios espalhados (recomendados para anti-ban)
+  { value: '0 9,19 * * *', label: '📱 Tech (9h e 19h)', hint: 'Cafe da manha + fim do expediente' },
+  { value: '0 11,17 * * *', label: '🏠 Casa (11h e 17h)', hint: 'Pre-almoco + saida do trabalho' },
+  { value: '0 7,21 * * *', label: '💪 Fitness (7h e 21h)', hint: 'Antes do treino + planejando dia' },
+  { value: '0 10,20 * * *', label: '💄 Beleza (10h e 20h)', hint: 'Meio-manha + fim do dia' },
+  { value: '0 8,16 * * *', label: '🔧 Ferramentas (8h e 16h)', hint: 'Antes da obra + meio tarde' },
+  // Outros padroes uteis
+  { value: '0 */2 * * *', label: 'A cada 2 horas' },
+  { value: '0 9,12,18,21 * * *', label: '4x ao dia (9h/12h/18h/21h)' },
+  { value: '0 8,12,16,20 * * *', label: '4x ao dia (8h/12h/16h/20h)' },
+  { value: '0 9 * * *', label: 'Uma vez (9h)' },
+  { value: '0 12 * * *', label: 'Uma vez (12h)' },
+  { value: '0 18 * * *', label: 'Uma vez (18h)' },
+  { value: '0 21 * * *', label: 'Uma vez (21h)' },
+];
+
 function CronLabel({ expr }: { expr: string }) {
-  const labels: Record<string, string> = {
-    '0 */2 * * *': 'A cada 2h',
-    '0 9,12,18,21 * * *': '9h, 12h, 18h e 21h',
-    '0 * * * *': 'Todo hora',
-    '*/30 * * * *': 'A cada 30min',
-    '0 8,20 * * *': '8h e 20h',
-  };
-  return <span className="text-xs text-gray-500">{labels[expr] ?? expr}</span>;
+  const found = CRON_OPTIONS.find((o) => o.value === expr);
+  return <span className="text-xs text-gray-500">{found?.label ?? expr}</span>;
 }
 
 const EMPTY_FORM = {
@@ -189,12 +200,14 @@ export default function Campaigns() {
               <label className="block text-xs text-gray-400 mb-1.5">Agendamento (cron)</label>
               <select className="input" value={form.cronExpr}
                 onChange={(e) => setForm({ ...form, cronExpr: e.target.value })}>
-                <option value="0 */2 * * *">A cada 2 horas</option>
-                <option value="0 9,12,18,21 * * *">9h, 12h, 18h e 21h</option>
-                <option value="0 * * * *">Todo hora</option>
-                <option value="0 8,20 * * *">8h e 20h</option>
-                <option value="*/30 * * * *">A cada 30 min</option>
+                {CRON_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value} title={o.hint}>{o.label}</option>
+                ))}
               </select>
+              {(() => {
+                const found = CRON_OPTIONS.find((o) => o.value === form.cronExpr);
+                return found?.hint ? <p className="text-xs text-gray-500 mt-1">{found.hint}</p> : null;
+              })()}
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Template</label>

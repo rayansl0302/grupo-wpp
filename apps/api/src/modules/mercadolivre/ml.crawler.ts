@@ -87,7 +87,6 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
         if (text.includes('envio do exterior')) return true;
         if (text.includes('vem do exterior')) return true;
         if (text.includes('china') && (text.includes('envio') || text.includes('vem'))) return true;
-        // Bandeiras no HTML (img alt)
         const imgs = el.querySelectorAll('img[alt]');
         for (let i = 0; i < imgs.length; i++) {
           const alt = (imgs[i].getAttribute('alt') || '').toLowerCase();
@@ -96,43 +95,12 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
         return false;
       };
 
-      // Estrategia 1: JSON-LD
-      document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
-        try {
-          const json = JSON.parse(el.textContent || '{}');
-          const list = Array.isArray(json) ? json : [json];
-          for (const obj of list) {
-            if (obj['@type'] === 'ItemList' && Array.isArray(obj.itemListElement)) {
-              for (const entry of obj.itemListElement) {
-                const it = entry.item || entry;
-                const price = parseFloat(it.offers?.price || it.offers?.lowPrice || 0);
-                if (it.name && it.url && price > 0) {
-                  items.push({
-                    mlId: (it.url.match(/MLB-?(\d+)/)?.[1] || '') as string,
-                    title: it.name as string,
-                    salePrice: price,
-                    originalPrice: null,
-                    discount: null,
-                    thumbnail: (it.image || '') as string,
-                    permalink: it.url.split('?')[0] as string,
-                    freeShipping: false,
-                  });
-                }
-              }
-            }
-          }
-        } catch {}
-      });
-
-      if (items.length > 0) return items;
-
-      // Estrategia 2: cards HTML
+      // Estrategia 1: parsing de cards (tem originalPrice + discount + freeShipping)
       const cards = document.querySelectorAll(
         '.poly-card, .ui-search-result__wrapper, li.ui-search-layout__item, .promotion-item',
       );
       cards.forEach((el) => {
         try {
-          // Pula produtos internacionais (China etc)
           if (isInternational(el)) return;
 
           const titleEl = el.querySelector(
@@ -179,6 +147,36 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
           }
         } catch {}
       });
+
+      // Estrategia 2 (fallback): JSON-LD se cards nao funcionaram
+      if (items.length === 0) {
+        document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
+          try {
+            const json = JSON.parse(el.textContent || '{}');
+            const list = Array.isArray(json) ? json : [json];
+            for (const obj of list) {
+              if (obj['@type'] === 'ItemList' && Array.isArray(obj.itemListElement)) {
+                for (const entry of obj.itemListElement) {
+                  const it = entry.item || entry;
+                  const price = parseFloat(it.offers?.price || it.offers?.lowPrice || 0);
+                  if (it.name && it.url && price > 0) {
+                    items.push({
+                      mlId: '',
+                      title: it.name,
+                      salePrice: price,
+                      originalPrice: null,
+                      discount: null,
+                      thumbnail: it.image || '',
+                      permalink: it.url.split('?')[0],
+                      freeShipping: false,
+                    });
+                  }
+                }
+              }
+            }
+          } catch {}
+        });
+      }
 
       return items;
     });
