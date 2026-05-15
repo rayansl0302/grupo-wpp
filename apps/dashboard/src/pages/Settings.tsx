@@ -36,7 +36,8 @@ export default function Settings() {
 
   const handleConnectML = () => {
     const apiUrl = api.defaults.baseURL || '';
-    window.open(`${apiUrl}/auth/ml/start`, '_blank', 'width=600,height=700');
+    // Abre em nova aba (popup com 'width' eh bloqueado pelo ML CloudFront)
+    window.open(`${apiUrl}/auth/ml/start`, '_blank');
   };
 
   const handleDisconnectML = async () => {
