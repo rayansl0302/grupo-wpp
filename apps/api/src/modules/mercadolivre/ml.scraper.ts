@@ -29,23 +29,33 @@ export async function scrapeSearch(params: MLSearchParams): Promise<MLNormalized
   const querySlug = encodeURIComponent(query).replace(/%20/g, '-');
   const targetUrl = `https://lista.mercadolivre.com.br/${querySlug}`;
 
-  // Estrategia 1: ScraperAPI (recomendado para producao)
+  // Estrategia 1: ScraperAPI com render JS + premium residential
   if (process.env.SCRAPER_API_KEY) {
-    const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}&country_code=br&render=false`;
+    // render=true: executa JS (custa 10 creditos vs 1, mas ML precisa de JS)
+    // premium=true: IP residencial (passa Cloudflare)
+    // country_code=br: IP brasileiro
+    const scraperParams = new URLSearchParams({
+      api_key: process.env.SCRAPER_API_KEY,
+      url: targetUrl,
+      country_code: 'br',
+      render: 'true',
+      premium: 'true',
+    });
+    const scraperUrl = `http://api.scraperapi.com?${scraperParams.toString()}`;
     try {
-      console.log(`[SCRAPER] Tentativa 1: ScraperAPI para "${query}"`);
+      console.log(`[SCRAPER] Tentativa 1: ScraperAPI (render+premium) para "${query}"`);
       const t0 = Date.now();
-      const res = await axios.get<string>(scraperUrl, { timeout: 70_000 });
+      const res = await axios.get<string>(scraperUrl, { timeout: 120_000 });
       console.log(`[SCRAPER] ScraperAPI respondeu em ${Date.now() - t0}ms, ${res.data.length} bytes`);
       const products = parseHtml(res.data, params);
       if (products.length > 0) {
         console.log(`[SCRAPER] ScraperAPI OK: ${products.length} produtos`);
         return products;
       } else {
-        console.log(`[SCRAPER] ScraperAPI respondeu mas extraiu 0 produtos. Inicio do HTML: ${res.data.slice(0, 300).replace(/\n/g, ' ')}`);
+        console.log(`[SCRAPER] ScraperAPI respondeu mas extraiu 0 produtos. Inicio: ${res.data.slice(0, 400).replace(/\n/g, ' ')}`);
       }
     } catch (err: any) {
-      console.error(`[SCRAPER] ScraperAPI falhou: ${err?.message}`);
+      console.error(`[SCRAPER] ScraperAPI falhou: ${err?.message} ${err?.response?.status || ''}`);
     }
   }
 
