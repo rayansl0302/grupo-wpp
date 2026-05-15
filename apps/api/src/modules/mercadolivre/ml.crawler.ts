@@ -1,23 +1,35 @@
 import { chromium, Browser, BrowserContext } from 'playwright';
 import type { MLNormalizedProduct, MLSearchParams } from './ml.types';
 
-const PROXY = process.env.PROXY_USERNAME
-  ? {
-      server: `http://${process.env.PROXY_HOSTNAME || 'geo.iproyal.com'}:${process.env.PROXY_PORT || '12321'}`,
-      username: process.env.PROXY_USERNAME,
-      password: process.env.PROXY_PASSWORD,
-    }
-  : undefined;
+/** Gera proxy com session_id aleatorio (rotaciona IP a cada call) */
+function makeProxy() {
+  if (!process.env.PROXY_USERNAME || !process.env.PROXY_PASSWORD) return undefined;
+
+  // Se a senha tem _city-XXX, troca por _session-{random}_lifetime-10m pra IP rotativo
+  // Mantem _country-br pra IP brasileiro
+  const sessionId = Math.random().toString(36).slice(2, 12);
+  const pwd = process.env.PROXY_PASSWORD;
+  // Pega so a parte antes de qualquer "_" extra (senha base)
+  const basePwd = pwd.split('_')[0];
+  const password = `${basePwd}_country-br_session-${sessionId}_lifetime-10m`;
+
+  return {
+    server: `http://${process.env.PROXY_HOSTNAME || 'geo.iproyal.com'}:${process.env.PROXY_PORT || '12321'}`,
+    username: process.env.PROXY_USERNAME,
+    password,
+  };
+}
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 // Cria browser novo por request (evita ERR_PROXY_AUTH_UNSUPPORTED em chamadas subsequentes)
 async function getBrowser(): Promise<Browser> {
-  console.log(`[CRAWLER] Iniciando Chromium ${PROXY ? '(com proxy BR)' : '(sem proxy)'}`);
+  const proxy = makeProxy();
+  console.log(`[CRAWLER] Iniciando Chromium ${proxy ? '(proxy BR com IP rotativo)' : '(sem proxy)'}`);
   return chromium.launch({
     headless: true,
-    proxy: PROXY,
+    proxy,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

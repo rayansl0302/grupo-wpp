@@ -1,12 +1,15 @@
 import { chromium, Browser, BrowserContext } from 'playwright';
 
-const PROXY = process.env.PROXY_USERNAME
-  ? {
-      server: `http://${process.env.PROXY_HOSTNAME || 'geo.iproyal.com'}:${process.env.PROXY_PORT || '12321'}`,
-      username: process.env.PROXY_USERNAME,
-      password: process.env.PROXY_PASSWORD,
-    }
-  : undefined;
+function makeProxy() {
+  if (!process.env.PROXY_USERNAME || !process.env.PROXY_PASSWORD) return undefined;
+  const sessionId = Math.random().toString(36).slice(2, 12);
+  const basePwd = process.env.PROXY_PASSWORD.split('_')[0];
+  return {
+    server: `http://${process.env.PROXY_HOSTNAME || 'geo.iproyal.com'}:${process.env.PROXY_PORT || '12321'}`,
+    username: process.env.PROXY_USERNAME,
+    password: `${basePwd}_country-br_session-${sessionId}_lifetime-10m`,
+  };
+}
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -52,7 +55,7 @@ async function getContext(): Promise<BrowserContext | null> {
   console.log('[LINK-GEN] Iniciando Chromium com sessao autenticada do ML');
   browser = await chromium.launch({
     headless: true,
-    proxy: PROXY,
+    proxy: makeProxy(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
