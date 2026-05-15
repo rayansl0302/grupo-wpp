@@ -1,4 +1,5 @@
-FROM node:20-slim AS base
+# Imagem com Playwright + Chromium ja instalados (otimizada pra scraping)
+FROM mcr.microsoft.com/playwright:v1.49.0-jammy AS base
 RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
@@ -26,5 +27,4 @@ RUN mkdir -p sessions logs data
 
 EXPOSE 3333
 
-# Schema ja esta sincronizado no Supabase - so inicia o servidor
 CMD ["node", "dist/server.js"]

@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { scrapeSearch } from './ml.scraper';
+import { crawlSearch } from './ml.crawler';
 import { prisma } from '../../config/database';
 import type { MLNormalizedProduct, MLSearchParams, MLSearchResult } from './ml.types';
 
@@ -190,6 +191,20 @@ export class MercadoLivreService {
       return this.applyFilters(MOCK_PRODUCTS, params);
     }
 
+    // ESTRATEGIA #1: Crawler com Playwright + proxy residencial BR (mais confiavel em 2026)
+    if (process.env.PROXY_USERNAME) {
+      try {
+        const products = await crawlSearch(params);
+        if (products.length > 0) {
+          console.log(`[ML] Crawler retornou ${products.length} produtos`);
+          return products;
+        }
+      } catch (err: any) {
+        console.error('[ML] Crawler falhou:', err?.message);
+      }
+    }
+
+    // ESTRATEGIA #2: API oficial (geralmente bloqueada em 2026, mas tentamos)
     try {
       const raw = await this.fetchFromApi(params);
       console.log(`[ML] query="${params.query}" -> ${raw.length} produtos retornados`);
