@@ -9,6 +9,7 @@ const CRON_OPTIONS: { value: string; label: string; hint?: string }[] = [
   { value: '0 7,21 * * *', label: '💪 Fitness (7h e 21h)', hint: 'Antes do treino + planejando dia' },
   { value: '0 10,20 * * *', label: '💄 Beleza (10h e 20h)', hint: 'Meio-manha + fim do dia' },
   { value: '0 8,16 * * *', label: '🔧 Ferramentas (8h e 16h)', hint: 'Antes da obra + meio tarde' },
+  { value: '0 13,18 * * *', label: '👟 Moda & Calçados (13h e 18h)', hint: 'Almoço + saída do trabalho' },
   // Outros padroes uteis
   { value: '0 */2 * * *', label: 'A cada 2 horas' },
   { value: '0 9,12,18,21 * * *', label: '4x ao dia (9h/12h/18h/21h)' },
