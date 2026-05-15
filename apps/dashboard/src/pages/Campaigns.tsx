@@ -236,10 +236,25 @@ export default function Campaigns() {
               Enviados: <strong>{runResult.data.sent}</strong> | Falhas: <strong>{runResult.data.failed}</strong>
             </p>
           )}
+          {runResult.data?.productSearch && (
+            <div className="mt-2 bg-black/30 p-2 rounded text-xs space-y-1">
+              <p className="text-gray-300">
+                <strong>ML search:</strong> "{runResult.data.productSearch.keyword}" - {runResult.data.productSearch.foundCount} produtos
+              </p>
+              {runResult.data.productSearch.sample?.map((p: any, i: number) => (
+                <p key={i} className="text-gray-400 truncate">
+                  - {p.title} (R$ {p.price}{p.discount ? `, -${p.discount}%` : ''})
+                </p>
+              ))}
+            </div>
+          )}
           {runResult.data?.diagnostics && (
-            <pre className="text-[10px] text-gray-400 mt-2 bg-black/30 p-2 rounded overflow-x-auto">
-              {JSON.stringify(runResult.data.diagnostics, null, 2)}
-            </pre>
+            <details className="mt-2">
+              <summary className="text-xs text-gray-500 cursor-pointer">Ver diagnostico completo</summary>
+              <pre className="text-[10px] text-gray-400 mt-1 bg-black/30 p-2 rounded overflow-x-auto">
+                {JSON.stringify(runResult.data.diagnostics, null, 2)}
+              </pre>
+            </details>
           )}
         </div>
       )}

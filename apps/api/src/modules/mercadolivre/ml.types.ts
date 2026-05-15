@@ -34,8 +34,8 @@ export interface MLNormalizedProduct {
   thumbnail: string;
   permalink: string;
   freeShipping: boolean;
-  seller: string;
-  soldCount: number;
+  seller: string | null;
+  soldCount: number | null;
   rating: number | null;
   category: string | null;
 }

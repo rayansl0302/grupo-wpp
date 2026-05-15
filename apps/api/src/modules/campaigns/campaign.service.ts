@@ -76,7 +76,8 @@ export class CampaignService {
     );
 
     if (products.length === 0) {
-      logger.info({ campaignId: campaign.id, groupId: group.id }, 'Nenhum produto novo para enviar');
+      logger.info({ campaignId: campaign.id, groupId: group.id, keyword }, 'Nenhum produto novo para enviar');
+      console.log(`[CAMPAIGN] Sem produtos para keyword "${keyword}". Verifique filtros (minDiscount, maxPrice, freeShipping).`);
       return { sent: 0, failed: 0 };
     }
 

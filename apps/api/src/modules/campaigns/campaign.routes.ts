@@ -78,6 +78,29 @@ campaignRouter.patch('/:id/toggle', async (req, res) => {
   res.json(updated);
 });
 
+// GET /campaigns/test-search?q=fone -- testa direto se o ML retorna produtos
+campaignRouter.get('/test-search', async (req, res) => {
+  try {
+    const { mlService } = await import('../mercadolivre/ml.service');
+    const q = (req.query.q as string) || 'notebook';
+    const products = await mlService.searchProducts({ query: q, limit: 5 });
+    res.json({
+      query: q,
+      count: products.length,
+      products: products.map((p) => ({
+        title: p.title,
+        salePrice: p.salePrice,
+        originalPrice: p.originalPrice,
+        discount: p.discount,
+        thumbnail: p.thumbnail,
+        permalink: p.permalink,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 // POST /campaigns/:id/run - executa manualmente com diagnostico
 campaignRouter.post('/:id/run', async (req, res) => {
   console.log(`\n[CAMPAIGN] Execucao manual iniciada: ${req.params.id}`);
@@ -112,9 +135,37 @@ campaignRouter.post('/:id/run', async (req, res) => {
       });
     }
 
+    // Testa busca antes de rodar a campanha completa
+    const { mlService } = await import('../mercadolivre/ml.service');
+    const testKeyword = diagnostics.keywords[0] || 'notebook';
+    const testProducts = await mlService.searchProducts({
+      query: testKeyword,
+      minDiscount: campaign.minDiscount,
+      maxPrice: campaign.maxPrice ?? undefined,
+      freeShipping: campaign.freeShipping,
+      limit: 3,
+    });
+
+    const productSearch = {
+      keyword: testKeyword,
+      foundCount: testProducts.length,
+      sample: testProducts.slice(0, 2).map((p) => ({
+        title: p.title,
+        price: p.salePrice,
+        discount: p.discount,
+      })),
+    };
+
+    if (testProducts.length === 0) {
+      return res.json({
+        sent: 0, failed: 0, diagnostics, productSearch,
+        warning: `ML retornou 0 produtos para "${testKeyword}". Tente baixar minDiscount ou desmarcar freeShipping.`,
+      });
+    }
+
     const result = await campaignService.runCampaign(req.params.id);
     console.log('[CAMPAIGN] Resultado:', result);
-    res.json({ ...result, diagnostics });
+    res.json({ ...result, diagnostics, productSearch });
   } catch (err: any) {
     console.error('[CAMPAIGN] Erro na execucao:', err);
     res.status(500).json({ error: err.message, stack: err.stack });
