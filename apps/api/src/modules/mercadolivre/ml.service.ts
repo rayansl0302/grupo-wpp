@@ -97,17 +97,29 @@ export class MercadoLivreService {
 
   async searchProducts(params: MLSearchParams): Promise<MLNormalizedProduct[]> {
     if (this.useMock) {
-      logger.warn('ML_APP_ID não configurado — usando dados mockados');
+      console.log('[ML] usando MOCK (sem ML_APP_ID)');
       return this.applyFilters(MOCK_PRODUCTS, params);
     }
 
     try {
       const raw = await this.fetchFromApi(params);
-      return raw
-        .map((item) => this.normalize(item))
-        .filter((p) => this.passesQualityFilter(p, params));
-    } catch (err) {
-      logger.error({ err }, 'Erro ao buscar produtos do ML — fallback para mock');
+      console.log(`[ML] query="${params.query}" -> ${raw.length} produtos retornados`);
+      const normalized = raw.map((item) => this.normalize(item));
+      const filtered = normalized.filter((p) => this.passesQualityFilter(p, params));
+      console.log(`[ML] apos filtros (minDiscount=${params.minDiscount}, maxPrice=${params.maxPrice}, freeShipping=${params.freeShipping}): ${filtered.length} produtos`);
+
+      if (filtered.length > 0) {
+        console.log(`[ML] exemplo: "${filtered[0].title}" - R$ ${filtered[0].salePrice} (discount: ${filtered[0].discount})`);
+      } else if (normalized.length > 0) {
+        // Mostra por que filtrou tudo
+        const sample = normalized[0];
+        console.log(`[ML] todos filtrados. Exemplo bruto: "${sample.title}" - R$${sample.salePrice} discount=${sample.discount} freeShipping=${sample.freeShipping} rating=${sample.rating}`);
+      }
+
+      return filtered;
+    } catch (err: any) {
+      console.error('[ML] ERRO ao buscar produtos:', err?.response?.status, err?.response?.data || err?.message);
+      logger.error({ err }, 'Erro ao buscar produtos do ML - fallback para mock');
       return this.applyFilters(MOCK_PRODUCTS, params);
     }
   }
@@ -163,17 +175,17 @@ export class MercadoLivreService {
     };
   }
 
-  /** Filtra produtos ruins: preço suspeito, desconto falso, pouco vendido etc. */
+  /** Filtra produtos ruins: preco suspeito, desconto falso, pouco vendido etc. */
   private passesQualityFilter(p: MLNormalizedProduct, params: MLSearchParams): boolean {
-    if (params.minDiscount && (!p.discount || p.discount < params.minDiscount)) return false;
+    // ML nem sempre retorna original_price - se minDiscount > 0 mas produto nao tem desconto calculavel,
+    // so rejeitamos se tiver desconto E for menor. Se discount=null, permite passar.
+    if (params.minDiscount && p.discount !== null && p.discount < params.minDiscount) return false;
+
     if (params.freeShipping && !p.freeShipping) return false;
     if (params.minPrice && p.salePrice < params.minPrice) return false;
     if (params.maxPrice && p.salePrice > params.maxPrice) return false;
 
-    // Desconto falso: original_price inventado ou diferença mínima
-    if (p.discount && p.discount < 5) return false;
-
-    // Produto com avaliação muito ruim
+    // Produto com avaliacao muito ruim
     if (p.rating !== null && p.rating < 3.5) return false;
 
     return true;
