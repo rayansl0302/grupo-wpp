@@ -70,6 +70,24 @@ whatsappRouter.get('/groups', async (_req, res) => {
   res.json(groups);
 });
 
+// PATCH /whatsapp/groups/:id - atualiza nome, dailyLimit, active
+whatsappRouter.patch('/groups/:id', async (req, res) => {
+  try {
+    const body = z.object({
+      name: z.string().min(1).optional(),
+      dailyLimit: z.number().int().min(0).max(500).optional(),
+      active: z.boolean().optional(),
+    }).parse(req.body);
+    const updated = await prisma.whatsAppGroup.update({
+      where: { id: req.params.id },
+      data: body,
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message, issues: err.issues });
+  }
+});
+
 // PATCH /whatsapp/groups/:id/toggle — ativa/pausa grupo
 whatsappRouter.patch('/groups/:id/toggle', async (req, res) => {
   const group = await prisma.whatsAppGroup.findUniqueOrThrow({ where: { id: req.params.id } });

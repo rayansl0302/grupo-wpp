@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ToggleLeft, ToggleRight, Wifi, WifiOff, QrCode, Plus, RefreshCw, Trash2, Search, Download } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Wifi, WifiOff, QrCode, Plus, RefreshCw, Trash2, Search, Download, Pencil } from 'lucide-react';
 import { groupApi, sessionApi, type Group, type Session } from '../services/api';
 
 interface WAGroup { jid: string; subject: string }
@@ -12,6 +12,8 @@ export default function Groups() {
   const [loadingQr, setLoadingQr] = useState<string | null>(null);
   const [fetchingFor, setFetchingFor] = useState<string | null>(null);
   const [waGroups, setWaGroups] = useState<{ sessionId: string; sessionName: string; items: WAGroup[] } | null>(null);
+  const [editGroup, setEditGroup] = useState<{ id: string; name: string; dailyLimit: number } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const load = async () => {
@@ -82,6 +84,27 @@ export default function Groups() {
     if (!confirm(`Remover o grupo "${name}"?`)) return;
     await groupApi.remove(id);
     load();
+  };
+
+  const handleEditGroup = (g: Group) => {
+    setEditGroup({ id: g.id, name: g.name, dailyLimit: g.dailyLimit });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editGroup) return;
+    setEditSaving(true);
+    try {
+      await groupApi.update(editGroup.id, {
+        name: editGroup.name.trim(),
+        dailyLimit: Number(editGroup.dailyLimit),
+      });
+      setEditGroup(null);
+      load();
+    } catch (e: any) {
+      alert(`Erro ao salvar: ${e?.response?.data?.error || e?.message}`);
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleDeleteSession = async (s: Session) => {
@@ -201,6 +224,42 @@ export default function Groups() {
         </div>
       )}
 
+      {/* Modal de editar grupo */}
+      {editGroup && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setEditGroup(null)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <Pencil size={18} className="text-blue-400" />
+              <h3 className="font-semibold text-white">Editar grupo</h3>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Nome</label>
+                <input className="input" value={editGroup.name}
+                  onChange={(e) => setEditGroup({ ...editGroup, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">
+                  Limite diario de envios
+                  <span className="text-gray-600"> (recomendado: 10-30 pra evitar ban)</span>
+                </label>
+                <input type="number" className="input" min={1} max={500}
+                  value={editGroup.dailyLimit}
+                  onChange={(e) => setEditGroup({ ...editGroup, dailyLimit: Number(e.target.value) })} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={handleSaveEdit} disabled={editSaving} className="btn-primary text-sm flex-1 disabled:opacity-50">
+                {editSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button onClick={() => setEditGroup(null)} className="btn-ghost text-sm">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sessoes */}
       <div className="card">
         <h2 className="font-semibold mb-4 flex items-center gap-2">
@@ -268,6 +327,9 @@ export default function Groups() {
                 <p className="text-xs text-gray-500 truncate">{g.jid} &middot; {g.session.name} &middot; max {g.dailyLimit}/dia</p>
               </div>
               <div className="flex items-center gap-2">
+                <button onClick={() => handleEditGroup(g)} className="text-blue-400 hover:text-blue-300" title="Editar">
+                  <Pencil size={14} />
+                </button>
                 <button onClick={() => handleToggleGroup(g.id)} className="text-gray-400 hover:text-white" title={g.active ? 'Pausar' : 'Ativar'}>
                   {g.active ? <ToggleRight size={22} className="text-brand-500" /> : <ToggleLeft size={22} />}
                 </button>

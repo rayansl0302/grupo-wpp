@@ -90,6 +90,8 @@ export const groupApi = {
   remove: (id: string) => api.delete(`/whatsapp/groups/${id}`),
   create: (data: { jid: string; name: string; sessionId: string; dailyLimit?: number }) =>
     api.post<Group>('/whatsapp/groups', data),
+  update: (id: string, data: { name?: string; dailyLimit?: number; active?: boolean }) =>
+    api.patch<Group>(`/whatsapp/groups/${id}`, data),
 };
 
 export const sessionApi = {
