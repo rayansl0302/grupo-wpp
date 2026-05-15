@@ -17,6 +17,9 @@ mlOAuthRouter.get('/start', (_req, res) => {
     return res.status(500).json({ error: 'ML_APP_ID nao configurado' });
   }
 
+  console.log(`[ML-OAUTH] env.ML_REDIRECT_URI = "${env.ML_REDIRECT_URI}"`);
+  console.log(`[ML-OAUTH] process.env.ML_REDIRECT_URI = "${process.env.ML_REDIRECT_URI}"`);
+
   const url = new URL(ML_AUTH_URL);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', env.ML_APP_ID);
@@ -24,6 +27,22 @@ mlOAuthRouter.get('/start', (_req, res) => {
 
   console.log(`[ML-OAUTH] Redirecionando para: ${url.toString()}`);
   res.redirect(url.toString());
+});
+
+/**
+ * Debug: mostra as variaveis ML do ambiente
+ * GET /auth/ml/debug
+ */
+mlOAuthRouter.get('/debug', (_req, res) => {
+  res.json({
+    env_ML_REDIRECT_URI: env.ML_REDIRECT_URI,
+    process_env_ML_REDIRECT_URI: process.env.ML_REDIRECT_URI,
+    env_ML_APP_ID: env.ML_APP_ID,
+    env_ML_AFFILIATE_ID: env.ML_AFFILIATE_ID,
+    has_client_secret: !!env.ML_CLIENT_SECRET,
+    node_env: process.env.NODE_ENV,
+    deploy_timestamp: new Date().toISOString(),
+  });
 });
 
 /**
