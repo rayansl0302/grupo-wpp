@@ -43,7 +43,7 @@ export async function crawlOffers(params: MLSearchParams = {}): Promise<MLNormal
   return crawlUrl('https://www.mercadolivre.com.br/ofertas', params);
 }
 
-async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormalizedProduct[]> {
+async function crawlUrl(url: string, params: MLSearchParams, retry = true): Promise<MLNormalizedProduct[]> {
   let context: BrowserContext | null = null;
   let browser: Browser | null = null;
   const t0 = Date.now();
@@ -238,6 +238,16 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
     return filtered;
   } catch (err: any) {
     console.error(`[CRAWLER] Erro: ${err?.message}`);
+    // Retry 1 vez se for erro de proxy (auth stale)
+    if (retry && err?.message?.includes('PROXY_AUTH')) {
+      console.log('[CRAWLER] Retry apos erro de proxy auth...');
+      await context?.close().catch(() => {});
+      await browser?.close().catch(() => {});
+      context = null;
+      browser = null;
+      await new Promise((r) => setTimeout(r, 2000));
+      return crawlUrl(url, params, false);
+    }
     return [];
   } finally {
     await context?.close().catch(() => {});
