@@ -93,37 +93,30 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
   try {
     console.log(`[LINK-GEN] Gerando link para: ${productUrl.slice(0, 80)}...`);
 
-    // Tenta varias URLs do gerador (ML muda direto)
-    const urls = [
-      'https://www.mercadolivre.com.br/afiliados/criador/links',
-      'https://www.mercadolivre.com.br/afiliados/linkbuilder',
-      'https://www.mercadolivre.com.br/afiliados/recomendados',
-      'https://www.mercadolivre.com.br/afiliados/criador/recomendados',
-    ];
-
-    let loaded = false;
-    for (const url of urls) {
-      try {
-        const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-        console.log(`[LINK-GEN] ${url} -> ${resp?.status()}`);
-        if (resp && resp.status() < 400) {
-          // Confirma que carregou conteudo do gerador (nao redirect para login)
-          await page.waitForTimeout(2000);
-          const title = await page.title();
-          const hasTextarea = await page.locator('textarea').count() > 0;
-          console.log(`[LINK-GEN] title="${title}" hasTextarea=${hasTextarea}`);
-          if (hasTextarea && !title.toLowerCase().includes('login')) {
-            loaded = true;
-            break;
-          }
-        }
-      } catch (err: any) {
-        console.log(`[LINK-GEN] falhou ${url}: ${err?.message}`);
-      }
+    // Acessa o gerador (aceita redirects automaticamente)
+    try {
+      await page.goto('https://www.mercadolivre.com.br/afiliados/linkbuilder', {
+        waitUntil: 'load',
+        timeout: 30_000,
+      });
+    } catch (err: any) {
+      // Se interrompido por redirect, tenta de novo
+      console.log(`[LINK-GEN] navegacao interrompida (${err?.message?.slice(0, 80)}), aguardando settle...`);
+      await page.waitForTimeout(3000);
     }
 
-    if (!loaded) {
-      console.warn('[LINK-GEN] Nenhuma URL do gerador funcionou. Sessao expirou?');
+    // Aguarda a pagina final carregar (ela pode redirecionar)
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await page.waitForTimeout(2000);
+
+    const currentUrl = page.url();
+    const title = await page.title();
+    const hasTextarea = await page.locator('textarea').count() > 0;
+    console.log(`[LINK-GEN] url=${currentUrl}`);
+    console.log(`[LINK-GEN] title="${title}" hasTextarea=${hasTextarea}`);
+
+    if (!hasTextarea || title.toLowerCase().includes('login')) {
+      console.warn('[LINK-GEN] Pagina nao tem textarea ou caiu no login. Sessao expirou?');
       return null;
     }
 
