@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
+import { scrapeSearch } from './ml.scraper';
 import type { MLNormalizedProduct, MLSearchParams, MLSearchResult } from './ml.types';
 
 // ─── Mock data para desenvolvimento sem credenciais ML ─────────────────────────
@@ -93,7 +94,11 @@ export class MercadoLivreService {
     this.http = axios.create({
       baseURL: 'https://api.mercadolibre.com',
       timeout: 15_000,
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
     });
   }
 
@@ -158,8 +163,20 @@ export class MercadoLivreService {
 
       return filtered;
     } catch (err: any) {
-      console.error('[ML] ERRO ao buscar produtos:', err?.response?.status, err?.response?.data || err?.message);
-      logger.error({ err }, 'Erro ao buscar produtos do ML - fallback para mock');
+      console.error('[ML] API oficial falhou:', err?.response?.status, '- tentando scraper publico...');
+
+      // Fallback 1: scraper da pagina publica (sempre funciona)
+      try {
+        const scraped = await scrapeSearch(params);
+        const filtered = scraped.filter((p) => this.passesQualityFilter(p, params));
+        console.log(`[ML-SCRAPER] ${scraped.length} brutos -> ${filtered.length} apos filtros`);
+        if (filtered.length > 0) return filtered;
+      } catch (scrapeErr: any) {
+        console.error('[ML-SCRAPER] tambem falhou:', scrapeErr?.message);
+      }
+
+      // Fallback 2: mocks
+      console.warn('[ML] usando MOCK como ultimo recurso');
       return this.applyFilters(MOCK_PRODUCTS, params);
     }
   }
