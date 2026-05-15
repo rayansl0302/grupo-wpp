@@ -112,8 +112,11 @@ export class CampaignService {
             await whatsappService.sendText(group.session.name, group.jid, message);
           }
 
-          await prisma.sentPost.create({
-            data: {
+          // Usa upsert pra evitar erro P2002 (mesma productId+groupId enviado 2x)
+          await prisma.sentPost.upsert({
+            where: { productId_groupId: { productId: product.id, groupId: group.id } },
+            update: { message, status: 'sent', sentAt: new Date(), error: null },
+            create: {
               productId: product.id,
               groupId: group.id,
               campaignId: campaign.id,
@@ -127,8 +130,10 @@ export class CampaignService {
           logger.info({ productId: product.id, groupId: group.id }, 'Produto enviado');
         } catch (err) {
           failed++;
-          await prisma.sentPost.create({
-            data: {
+          await prisma.sentPost.upsert({
+            where: { productId_groupId: { productId: product.id, groupId: group.id } },
+            update: { status: 'failed', error: String(err), sentAt: new Date() },
+            create: {
               productId: product.id,
               groupId: group.id,
               campaignId: campaign.id,
