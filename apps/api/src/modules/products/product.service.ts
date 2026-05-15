@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database';
 import { mlService } from '../mercadolivre/ml.service';
+import { generateAffiliateLink } from '../mercadolivre/ml.link-generator';
 import { shortenUrl } from '../../shared/utils/url-shortener';
 import { logger } from '../../config/logger';
 import type { MLSearchParams } from '../mercadolivre/ml.types';
@@ -27,11 +28,21 @@ export class ProductService {
     const seenProductIds = new Set<string>();
 
     for (const raw of rawProducts) {
-      const affiliatePermalink = mlService.buildAffiliateUrl(raw.permalink);
-      console.log(`[PRODUCT] permalink original: ${raw.permalink}`);
-      console.log(`[PRODUCT] com matt_word: ${affiliatePermalink}`);
-      const affiliateUrl = await shortenUrl(affiliatePermalink).catch(() => affiliatePermalink);
-      console.log(`[PRODUCT] final (encurtado): ${affiliateUrl}`);
+      // 1a tentativa: link bonito via painel de afiliado (se ML_STORAGE_STATE estiver setado)
+      let officialLink: string | null = null;
+      if (process.env.ML_STORAGE_STATE) {
+        officialLink = await generateAffiliateLink(raw.permalink).catch(() => null);
+      }
+
+      // Fallback: monta manualmente com matt_word
+      const affiliatePermalink = officialLink ?? mlService.buildAffiliateUrl(raw.permalink);
+      console.log(`[PRODUCT] origem: ${officialLink ? 'OFICIAL (painel)' : 'MANUAL (matt_word)'}`);
+      console.log(`[PRODUCT] link: ${affiliatePermalink.slice(0, 100)}`);
+
+      // So encurta links manuais - oficiais ja vem encurtados (meli.la)
+      const affiliateUrl = officialLink
+        ? officialLink
+        : await shortenUrl(affiliatePermalink).catch(() => affiliatePermalink);
 
       const product = await prisma.product.upsert({
         where: { mlId: raw.mlId },
