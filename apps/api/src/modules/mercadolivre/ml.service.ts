@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { scrapeSearch } from './ml.scraper';
+import { prisma } from '../../config/database';
 import type { MLNormalizedProduct, MLSearchParams, MLSearchResult } from './ml.types';
 
 // ─── Mock data para desenvolvimento sem credenciais ML ─────────────────────────
@@ -102,41 +103,84 @@ export class MercadoLivreService {
     });
   }
 
-  /** Obtem token OAuth via client_credentials. Cache de 5h45min (token dura 6h). */
+  /**
+   * Obtem token de acesso. Prioridade:
+   * 1. Token de USUARIO salvo no banco (OAuth Authorization Code) - tem acesso ao /search
+   * 2. Token de APP via client_credentials - fallback (geralmente bloqueado para search)
+   */
   private async getAccessToken(): Promise<string> {
+    // Tenta usar token de usuario primeiro
+    const userToken = await this.getUserToken().catch(() => null);
+    if (userToken) return userToken;
+
+    // Fallback: client_credentials
     const now = Date.now();
     if (this.accessToken && now < this.tokenExpiresAt) {
       return this.accessToken;
     }
 
-    console.log('[ML] Obtendo novo access_token via client_credentials...');
+    console.log('[ML] Obtendo token via client_credentials (fallback)...');
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: env.ML_APP_ID!,
+      client_secret: env.ML_CLIENT_SECRET!,
+    });
+
+    const res = await axios.post<{ access_token: string; expires_in: number }>(
+      'https://api.mercadolibre.com/oauth/token',
+      params.toString(),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        timeout: 10_000,
+      },
+    );
+
+    this.accessToken = res.data.access_token;
+    this.tokenExpiresAt = now + (res.data.expires_in - 900) * 1000;
+    return this.accessToken;
+  }
+
+  /** Obtem token de usuario do banco, renovando se necessario. */
+  private async getUserToken(): Promise<string | null> {
+    const token = await prisma.mLToken.findFirst({ orderBy: { updatedAt: 'desc' } });
+    if (!token) return null;
+
+    // Token ainda valido (com 5min de folga)
+    if (token.expiresAt.getTime() > Date.now() + 5 * 60 * 1000) {
+      return token.accessToken;
+    }
+
+    // Renova via refresh_token
+    console.log('[ML] Renovando token de usuario via refresh_token...');
     try {
       const params = new URLSearchParams({
-        grant_type: 'client_credentials',
+        grant_type: 'refresh_token',
         client_id: env.ML_APP_ID!,
         client_secret: env.ML_CLIENT_SECRET!,
+        refresh_token: token.refreshToken,
+      });
+      const res = await axios.post<{
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      }>('https://api.mercadolibre.com/oauth/token', params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 
-      const res = await axios.post<{ access_token: string; expires_in: number; token_type: string }>(
-        'https://api.mercadolibre.com/oauth/token',
-        params.toString(),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-          },
-          timeout: 10_000,
+      const expiresAt = new Date(Date.now() + res.data.expires_in * 1000);
+      await prisma.mLToken.update({
+        where: { id: token.id },
+        data: {
+          accessToken: res.data.access_token,
+          refreshToken: res.data.refresh_token,
+          expiresAt,
         },
-      );
-
-      this.accessToken = res.data.access_token;
-      // Renova 15min antes de expirar (default 21600s = 6h)
-      this.tokenExpiresAt = now + (res.data.expires_in - 900) * 1000;
-      console.log(`[ML] Token obtido. Valido por ${Math.round(res.data.expires_in / 60)}min`);
-      return this.accessToken;
+      });
+      console.log(`[ML] Token renovado, valido ate ${expiresAt.toISOString()}`);
+      return res.data.access_token;
     } catch (err: any) {
-      console.error('[ML] FALHA ao obter token:', err?.response?.status, err?.response?.data || err?.message);
-      throw err;
+      console.error('[ML] Falha ao renovar token de usuario:', err?.response?.data || err?.message);
+      return null;
     }
   }
 

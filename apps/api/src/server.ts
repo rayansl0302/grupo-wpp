@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
 import { authRouter, requireAuth } from './modules/auth/auth.routes';
+import { mlOAuthRouter } from './modules/mercadolivre/ml-oauth.routes';
 import { whatsappRouter } from './modules/whatsapp/whatsapp.routes';
 import { campaignRouter } from './modules/campaigns/campaign.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
@@ -30,6 +31,7 @@ async function bootstrap() {
   // ─── Rotas públicas ───────────────────────────────────────────────────────────
   app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
   app.use('/auth', authRouter);
+  app.use('/auth/ml', mlOAuthRouter); // OAuth do Mercado Livre (publica - precisa redirect funcionar)
 
   // ─── Rotas protegidas ─────────────────────────────────────────────────────────
   app.use('/whatsapp', requireAuth, whatsappRouter);
