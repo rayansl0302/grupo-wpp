@@ -78,10 +78,47 @@ campaignRouter.patch('/:id/toggle', async (req, res) => {
   res.json(updated);
 });
 
-// POST /campaigns/:id/run — executa manualmente
+// POST /campaigns/:id/run - executa manualmente com diagnostico
 campaignRouter.post('/:id/run', async (req, res) => {
-  const result = await campaignService.runCampaign(req.params.id);
-  res.json(result);
+  console.log(`\n[CAMPAIGN] Execucao manual iniciada: ${req.params.id}`);
+  try {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: req.params.id },
+      include: { groups: { include: { group: { include: { session: true } } } } },
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campanha nao encontrada' });
+    }
+
+    const diagnostics = {
+      campaignActive: campaign.active,
+      totalGroups: campaign.groups.length,
+      activeGroups: campaign.groups.filter((cg) => cg.group.active).length,
+      connectedGroups: campaign.groups.filter((cg) => cg.group.session.status === 'connected').length,
+      eligibleGroups: campaign.groups.filter((cg) => cg.group.active && cg.group.session.status === 'connected').length,
+      keywords: JSON.parse(campaign.keywords || '[]'),
+    };
+
+    console.log('[CAMPAIGN] Diagnostico:', diagnostics);
+
+    if (!campaign.active) {
+      return res.json({ sent: 0, failed: 0, diagnostics, warning: 'Campanha pausada (clique em Play para ativar)' });
+    }
+    if (diagnostics.eligibleGroups === 0) {
+      return res.json({
+        sent: 0, failed: 0, diagnostics,
+        warning: `Nenhum grupo elegivel. Vinculados: ${diagnostics.totalGroups}, ativos: ${diagnostics.activeGroups}, conectados: ${diagnostics.connectedGroups}`,
+      });
+    }
+
+    const result = await campaignService.runCampaign(req.params.id);
+    console.log('[CAMPAIGN] Resultado:', result);
+    res.json({ ...result, diagnostics });
+  } catch (err: any) {
+    console.error('[CAMPAIGN] Erro na execucao:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // DELETE /campaigns/:id

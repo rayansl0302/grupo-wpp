@@ -44,9 +44,23 @@ export default function Campaigns() {
     load();
   };
 
+  const [runResult, setRunResult] = useState<{ campaignId: string; data: any } | null>(null);
+
   const handleRun = async (id: string) => {
     setRunning(id);
-    try { await campaignApi.run(id); } finally { setRunning(null); load(); }
+    setRunResult(null);
+    try {
+      const { data } = await campaignApi.run(id);
+      setRunResult({ campaignId: id, data });
+    } catch (err: any) {
+      setRunResult({
+        campaignId: id,
+        data: { error: err?.response?.data?.error || err?.message || 'Erro desconhecido' },
+      });
+    } finally {
+      setRunning(null);
+      load();
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -203,6 +217,30 @@ export default function Campaigns() {
               <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancelar</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Resultado da execucao manual */}
+      {runResult && (
+        <div className={`card border ${runResult.data?.error ? 'border-red-700/50 bg-red-900/10' : runResult.data?.warning ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-green-700/50 bg-green-900/10'}`}>
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="font-semibold text-sm">
+              {runResult.data?.error ? '❌ Erro' : runResult.data?.warning ? '⚠️ Atencao' : '✅ Execucao concluida'}
+            </h3>
+            <button onClick={() => setRunResult(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
+          </div>
+          {runResult.data?.error && <p className="text-red-300 text-xs">{runResult.data.error}</p>}
+          {runResult.data?.warning && <p className="text-yellow-300 text-xs mb-2">{runResult.data.warning}</p>}
+          {typeof runResult.data?.sent === 'number' && (
+            <p className="text-xs text-gray-300">
+              Enviados: <strong>{runResult.data.sent}</strong> | Falhas: <strong>{runResult.data.failed}</strong>
+            </p>
+          )}
+          {runResult.data?.diagnostics && (
+            <pre className="text-[10px] text-gray-400 mt-2 bg-black/30 p-2 rounded overflow-x-auto">
+              {JSON.stringify(runResult.data.diagnostics, null, 2)}
+            </pre>
+          )}
         </div>
       )}
 

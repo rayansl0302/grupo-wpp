@@ -11,12 +11,18 @@ export function randomDelay(): Promise<void> {
 }
 
 /**
- * Estratégia de envio por janelas horárias.
- * Evita envios em horários "fora do padrão" que disparam detecção de bot.
+ * Estrategia de envio por janelas horarias (timezone Brasilia).
+ * Evita envios em horarios "fora do padrao" que disparam deteccao de bot.
  */
 export function isWithinActiveHours(): boolean {
-  const hour = new Date().getHours();
-  // Janelas permitidas: 07-23h (horário de Brasília assume UTC-3 no servidor)
+  // Pega hora em Sao Paulo independente do timezone do servidor (Railway = UTC)
+  const hourStr = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    hour12: false,
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date());
+  const hour = parseInt(hourStr, 10);
+  // Janelas permitidas: 07h-23h horario de Brasilia
   return hour >= 7 && hour <= 23;
 }
 
