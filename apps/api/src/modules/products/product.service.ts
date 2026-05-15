@@ -12,6 +12,31 @@ export class ProductService {
    * ainda não foram enviados para o grupo informado.
    */
   async fetchAndFilter(params: MLSearchParams, groupId: string): Promise<Product[]> {
+    // CACHE: se ja temos produtos dessa keyword recentes (<2h), reusa do banco
+    // Economiza banda do proxy e evita rate limit do ML
+    const TWO_HOURS_AGO = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    if (params.query) {
+      const cached = await prisma.product.findMany({
+        where: {
+          title: { contains: params.query, mode: 'insensitive' },
+          fetchedAt: { gte: TWO_HOURS_AGO },
+        },
+        orderBy: { fetchedAt: 'desc' },
+        take: 20,
+      });
+      if (cached.length >= 5) {
+        console.log(`[PRODUCT] CACHE HIT: ${cached.length} produtos recentes para "${params.query}"`);
+        const alreadySentIds = new Set(
+          (await prisma.sentPost.findMany({ where: { groupId }, select: { productId: true } }))
+            .map((s) => s.productId),
+        );
+        const fresh = cached.filter((p) => !alreadySentIds.has(p.id));
+        if (fresh.length > 0) {
+          return fresh.slice(0, params.limit ?? 5);
+        }
+      }
+    }
+
     const rawProducts = await mlService.searchProducts(params);
 
     // Produtos já enviados para este grupo

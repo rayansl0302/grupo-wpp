@@ -62,7 +62,23 @@ async function crawlUrl(url: string, params: MLSearchParams, retry = true): Prom
       Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
       (window as any).chrome = { runtime: {} };
     });
-    await ctx.route('**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2,mp4,webm}', (route) => route.abort());
+    // Bloqueia recursos desnecessarios pra economizar 70%+ da banda do proxy
+    await ctx.route('**/*', (route) => {
+      const url = route.request().url();
+      const resourceType = route.request().resourceType();
+
+      // Bloqueia tudo que nao seja document/script/xhr/fetch
+      if (['image', 'media', 'font', 'stylesheet', 'other'].includes(resourceType)) {
+        return route.abort();
+      }
+
+      // Bloqueia trackers e analytics (consomem banda sem valor)
+      if (/google-analytics|googletagmanager|doubleclick|facebook\.com\/tr|hotjar|segment|amplitude|criteo|adservice/i.test(url)) {
+        return route.abort();
+      }
+
+      return route.continue();
+    });
     context = ctx;
     const page = await ctx.newPage();
 
