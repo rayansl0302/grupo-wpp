@@ -31,14 +31,18 @@ export async function scrapeSearch(params: MLSearchParams): Promise<MLNormalized
 
   // Estrategia 1: ScraperAPI (recomendado para producao)
   if (process.env.SCRAPER_API_KEY) {
-    const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}&country_code=br`;
+    const scraperUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${encodeURIComponent(targetUrl)}&country_code=br&render=false`;
     try {
       console.log(`[SCRAPER] Tentativa 1: ScraperAPI para "${query}"`);
-      const res = await axios.get<string>(scraperUrl, { timeout: 30_000 });
+      const t0 = Date.now();
+      const res = await axios.get<string>(scraperUrl, { timeout: 70_000 });
+      console.log(`[SCRAPER] ScraperAPI respondeu em ${Date.now() - t0}ms, ${res.data.length} bytes`);
       const products = parseHtml(res.data, params);
       if (products.length > 0) {
         console.log(`[SCRAPER] ScraperAPI OK: ${products.length} produtos`);
         return products;
+      } else {
+        console.log(`[SCRAPER] ScraperAPI respondeu mas extraiu 0 produtos. Inicio do HTML: ${res.data.slice(0, 300).replace(/\n/g, ' ')}`);
       }
     } catch (err: any) {
       console.error(`[SCRAPER] ScraperAPI falhou: ${err?.message}`);
