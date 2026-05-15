@@ -93,25 +93,71 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
   try {
     console.log(`[LINK-GEN] Gerando link para: ${productUrl.slice(0, 80)}...`);
 
-    // Navega pro gerador de links
-    await page.goto('https://www.mercadolivre.com.br/afiliados/linkbuilder', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
+    // Tenta varias URLs do gerador (ML muda direto)
+    const urls = [
+      'https://www.mercadolivre.com.br/afiliados/criador/links',
+      'https://www.mercadolivre.com.br/afiliados/linkbuilder',
+      'https://www.mercadolivre.com.br/afiliados/recomendados',
+      'https://www.mercadolivre.com.br/afiliados/criador/recomendados',
+    ];
 
-    // Espera o campo de input aparecer
-    const textarea = await page.waitForSelector('textarea, input[type="text"]', { timeout: 15_000 });
-    await textarea.fill(productUrl);
+    let loaded = false;
+    for (const url of urls) {
+      try {
+        const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+        console.log(`[LINK-GEN] ${url} -> ${resp?.status()}`);
+        if (resp && resp.status() < 400) {
+          // Confirma que carregou conteudo do gerador (nao redirect para login)
+          await page.waitForTimeout(2000);
+          const title = await page.title();
+          const hasTextarea = await page.locator('textarea').count() > 0;
+          console.log(`[LINK-GEN] title="${title}" hasTextarea=${hasTextarea}`);
+          if (hasTextarea && !title.toLowerCase().includes('login')) {
+            loaded = true;
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.log(`[LINK-GEN] falhou ${url}: ${err?.message}`);
+      }
+    }
 
-    // Clica em "Gerar"
-    const generateBtn = await page.waitForSelector(
-      'button:has-text("Gerar"), button:has-text("Generate")',
-      { timeout: 10_000 },
-    );
-    await generateBtn.click();
+    if (!loaded) {
+      console.warn('[LINK-GEN] Nenhuma URL do gerador funcionou. Sessao expirou?');
+      return null;
+    }
 
-    // Aguarda o link aparecer (pode ser /sec/XXX ou /social/...)
-    await page.waitForTimeout(3000);
+    // Foca, limpa e digita a URL (type dispara eventos do React)
+    const textarea = page.locator('textarea').first();
+    await textarea.click();
+    await textarea.press('Control+A');
+    await textarea.press('Delete');
+    await textarea.type(productUrl, { delay: 10 });
+
+    // Dispara eventos extra pra forcar o React a reconhecer
+    await textarea.evaluate((el: any, value: string) => {
+      el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, productUrl);
+
+    // Aguarda botao ficar enabled
+    const generateBtn = page.locator('button:has-text("Gerar"), button:has-text("Generate")').first();
+    await generateBtn.waitFor({ state: 'visible', timeout: 10_000 });
+
+    // Aguarda ate 15s o botao ficar enabled
+    let tries = 0;
+    while (tries < 30) {
+      const disabled = await generateBtn.isDisabled().catch(() => true);
+      if (!disabled) break;
+      await page.waitForTimeout(500);
+      tries++;
+    }
+
+    await generateBtn.click({ timeout: 10_000 });
+    console.log(`[LINK-GEN] botao Gerar clicado em ${Date.now() - t0}ms`);
+
+    await page.waitForTimeout(4000);
 
     // Tenta capturar o link gerado de varias formas
     const link = await page.evaluate(() => {

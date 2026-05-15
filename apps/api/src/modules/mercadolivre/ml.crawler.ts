@@ -80,6 +80,22 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
     const products: any[] = await page.evaluate(() => {
       const items: any[] = [];
 
+      // Helper: detecta produtos internacionais (China etc) - queremos so nacionais
+      const isInternational = (el: Element): boolean => {
+        const text = (el.textContent || '').toLowerCase();
+        if (text.includes('internacional')) return true;
+        if (text.includes('envio do exterior')) return true;
+        if (text.includes('vem do exterior')) return true;
+        if (text.includes('china') && (text.includes('envio') || text.includes('vem'))) return true;
+        // Bandeiras no HTML (img alt)
+        const imgs = el.querySelectorAll('img[alt]');
+        for (let i = 0; i < imgs.length; i++) {
+          const alt = (imgs[i].getAttribute('alt') || '').toLowerCase();
+          if (alt.includes('china') || alt.includes('international')) return true;
+        }
+        return false;
+      };
+
       // Estrategia 1: JSON-LD
       document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
         try {
@@ -116,6 +132,9 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
       );
       cards.forEach((el) => {
         try {
+          // Pula produtos internacionais (China etc)
+          if (isInternational(el)) return;
+
           const titleEl = el.querySelector(
             'a.poly-component__title-wrapper, a.poly-component__title, h2.ui-search-item__title, h3.poly-component__title, .promotion-item__title',
           ) as HTMLElement | null;

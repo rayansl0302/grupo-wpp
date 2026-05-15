@@ -44,16 +44,17 @@ async function main() {
 
   const page = await context.newPage();
 
-  console.log('Navegando para o painel de afiliados...');
-  await page.goto('https://www.mercadolivre.com.br/afiliados-home', {
+  console.log('Navegando para o Mercado Livre...');
+  await page.goto('https://www.mercadolivre.com.br/', {
     waitUntil: 'domcontentloaded',
   });
 
   console.log('\n--------------------------------------------------------');
   console.log('  AGORA NO CHROME:');
-  console.log('  1) Faca login no Mercado Livre');
-  console.log('  2) Confirme 2FA se aparecer');
-  console.log('  3) Espere chegar no PAINEL DE AFILIADOS');
+  console.log('  1) Clica em "Entre" (canto superior direito)');
+  console.log('  2) Faz login no ML (email + senha + 2FA se tiver)');
+  console.log('  3) Depois vai na URL: mercadolivre.com.br/afiliados');
+  console.log('  4) Confirma que abriu o painel de afiliados');
   console.log('');
   console.log('  Quando estiver logado no painel, VOLTE AQUI');
   console.log('  e PRESSIONE ENTER para salvar a sessao.');
