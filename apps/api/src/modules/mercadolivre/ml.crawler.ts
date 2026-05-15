@@ -166,19 +166,28 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
 
     console.log(`[CRAWLER] Extraidos: ${products.length} produtos`);
 
-    // Filtra produtos com URL invalida (sem MLB-id, ou link de tracking click1)
-    const withValidUrl = products.filter((p) => {
-      if (!p.permalink || !p.permalink.startsWith('http')) return false;
-      // Descarta links de tracking de publicidade
-      if (p.permalink.includes('click1.mercadolivre.com.br')) return false;
-      // Aceita /p/MLB..., /up/MLBU..., MLB-..., etc
-      const valid = MLB_ID_REGEX.test(p.permalink);
-      if (!valid) {
+    // Filtra produtos com URL invalida + DEDUP por mlId (mesmo produto pode aparecer multiplas vezes)
+    const seen = new Set<string>();
+    const withValidUrl: typeof products = [];
+    for (const p of products) {
+      if (!p.permalink || !p.permalink.startsWith('http')) continue;
+      if (p.permalink.includes('click1.mercadolivre.com.br')) continue;
+      if (!MLB_ID_REGEX.test(p.permalink)) {
         console.log(`[CRAWLER] descartado URL invalida: "${p.title?.slice(0, 50)}" -> ${p.permalink}`);
+        continue;
       }
-      return valid;
-    });
-    console.log(`[CRAWLER] Com URL valida: ${withValidUrl.length}/${products.length}`);
+      // Extrai o ID canonical da URL pra dedup (MLB46024018, MLBU3441736097, etc)
+      const idMatch = p.permalink.match(/MLB[A-Z]?-?(\d+)/i);
+      const canonicalId = idMatch ? idMatch[0].toUpperCase().replace('-', '') : p.permalink;
+      if (seen.has(canonicalId)) {
+        continue; // duplicata silenciosa
+      }
+      seen.add(canonicalId);
+      // Garante que mlId tambem usa o canonical
+      p.mlId = canonicalId;
+      withValidUrl.push(p);
+    }
+    console.log(`[CRAWLER] Apos dedup: ${withValidUrl.length} produtos unicos (de ${products.length} brutos)`);
 
     if (withValidUrl.length > 0) {
       console.log(`[CRAWLER] exemplo de URL: ${withValidUrl[0].permalink}`);

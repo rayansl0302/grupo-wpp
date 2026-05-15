@@ -24,6 +24,7 @@ export class ProductService {
     );
 
     const results: Product[] = [];
+    const seenProductIds = new Set<string>();
 
     for (const raw of rawProducts) {
       const affiliatePermalink = mlService.buildAffiliateUrl(raw.permalink);
@@ -60,6 +61,10 @@ export class ProductService {
           category: raw.category,
         },
       });
+
+      // Dedup: nao adiciona o mesmo produto 2x no mesmo lote
+      if (seenProductIds.has(product.id)) continue;
+      seenProductIds.add(product.id);
 
       if (!alreadySent.has(product.id)) {
         results.push(product);
