@@ -190,7 +190,21 @@ async function crawlUrl(url: string, params: MLSearchParams): Promise<MLNormaliz
 
     console.log(`[CRAWLER] Extraidos: ${products.length} produtos`);
 
-    const filtered = products
+    // Filtra produtos com URL invalida (sem MLB-id)
+    const withValidUrl = products.filter((p) => {
+      const valid = p.permalink && /MLB-?\d+/.test(p.permalink) && p.permalink.startsWith('http');
+      if (!valid) {
+        console.log(`[CRAWLER] descartado URL invalida: "${p.title?.slice(0, 50)}" -> ${p.permalink}`);
+      }
+      return valid;
+    });
+    console.log(`[CRAWLER] Com URL valida: ${withValidUrl.length}/${products.length}`);
+
+    if (withValidUrl.length > 0) {
+      console.log(`[CRAWLER] exemplo de URL: ${withValidUrl[0].permalink}`);
+    }
+
+    const filtered = withValidUrl
       .map((p) => ({
         mlId: p.mlId,
         title: p.title,

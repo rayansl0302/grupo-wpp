@@ -342,12 +342,29 @@ export class MercadoLivreService {
   }
 
   buildAffiliateUrl(permalink: string): string {
-    if (!this.affiliateId) return permalink;
-    const url = new URL(permalink);
-    url.searchParams.set('matt_tool', 'affiliate');
-    url.searchParams.set('matt_word', this.affiliateId);
-    url.searchParams.set('matt_source', 'wpp_bot');
-    return url.toString();
+    if (!permalink || !this.affiliateId) return permalink;
+
+    // Valida que e uma URL real do ML com produto (MLB-XXX ou /p/MLB-XXX)
+    if (!/MLB-?\d+/.test(permalink)) {
+      console.warn(`[ML] URL invalida (sem MLB-id): ${permalink}`);
+      return permalink;
+    }
+
+    try {
+      const url = new URL(permalink);
+      url.searchParams.set('matt_tool', 'affiliate');
+      url.searchParams.set('matt_word', this.affiliateId);
+      url.searchParams.set('matt_source', 'wpp_bot');
+      return url.toString();
+    } catch (err) {
+      console.warn(`[ML] URL malformada: ${permalink}`);
+      return permalink;
+    }
+  }
+
+  /** Valida se um produto tem URL utilizavel */
+  isValidProductUrl(permalink: string): boolean {
+    return !!permalink && /MLB-?\d+/.test(permalink) && permalink.startsWith('http');
   }
 }
 
