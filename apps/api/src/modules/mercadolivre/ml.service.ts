@@ -82,17 +82,57 @@ export class MercadoLivreService {
   private readonly siteId: string;
   private readonly affiliateId: string;
   private readonly useMock: boolean;
+  private accessToken: string | null = null;
+  private tokenExpiresAt: number = 0;
 
   constructor() {
     this.siteId = env.ML_AFFILIATE_SITE_ID;
     this.affiliateId = env.ML_AFFILIATE_ID ?? '';
-    this.useMock = !env.ML_APP_ID;
+    this.useMock = !env.ML_APP_ID || !env.ML_CLIENT_SECRET;
 
     this.http = axios.create({
       baseURL: 'https://api.mercadolibre.com',
-      timeout: 10_000,
+      timeout: 15_000,
       headers: { Accept: 'application/json' },
     });
+  }
+
+  /** Obtem token OAuth via client_credentials. Cache de 5h45min (token dura 6h). */
+  private async getAccessToken(): Promise<string> {
+    const now = Date.now();
+    if (this.accessToken && now < this.tokenExpiresAt) {
+      return this.accessToken;
+    }
+
+    console.log('[ML] Obtendo novo access_token via client_credentials...');
+    try {
+      const params = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: env.ML_APP_ID!,
+        client_secret: env.ML_CLIENT_SECRET!,
+      });
+
+      const res = await axios.post<{ access_token: string; expires_in: number; token_type: string }>(
+        'https://api.mercadolibre.com/oauth/token',
+        params.toString(),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'application/json',
+          },
+          timeout: 10_000,
+        },
+      );
+
+      this.accessToken = res.data.access_token;
+      // Renova 15min antes de expirar (default 21600s = 6h)
+      this.tokenExpiresAt = now + (res.data.expires_in - 900) * 1000;
+      console.log(`[ML] Token obtido. Valido por ${Math.round(res.data.expires_in / 60)}min`);
+      return this.accessToken;
+    } catch (err: any) {
+      console.error('[ML] FALHA ao obter token:', err?.response?.status, err?.response?.data || err?.message);
+      throw err;
+    }
   }
 
   async searchProducts(params: MLSearchParams): Promise<MLNormalizedProduct[]> {
@@ -147,8 +187,10 @@ export class MercadoLivreService {
     };
     query.sort = sortMap[params.sortBy ?? 'relevance'] ?? 'relevance';
 
+    const token = await this.getAccessToken();
     const res = await this.http.get<{ results: MLSearchResult[] }>('/sites/MLB/search', {
       params: query,
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.data.results;
   }
