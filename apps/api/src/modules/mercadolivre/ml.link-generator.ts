@@ -127,37 +127,59 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
       return null;
     }
 
-    // Foca, limpa e digita a URL (type dispara eventos do React)
+    // Foca a textarea
     const textarea = page.locator('textarea').first();
     await textarea.click();
-    await textarea.press('Control+A');
-    await textarea.press('Delete');
-    await textarea.type(productUrl, { delay: 10 });
 
-    // Dispara eventos extra pra forcar o React a reconhecer
-    await textarea.evaluate((el: any, value: string) => {
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+    // Usa o NATIVE setter do React (Andes UI exige isso pra detectar input)
+    await page.evaluate((url: string) => {
+      const ta = document.querySelector('textarea');
+      if (!ta) return;
+      const proto = Object.getPrototypeOf(ta);
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (setter) {
+        setter.call(ta, url);
+      } else {
+        ta.value = url;
+      }
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      ta.dispatchEvent(new Event('change', { bubbles: true }));
+      ta.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      ta.blur();
+      ta.focus();
     }, productUrl);
 
-    // Aguarda botao ficar enabled
-    const generateBtn = page.locator('button:has-text("Gerar"), button:has-text("Generate")').first();
+    await page.waitForTimeout(1500);
+
+    // Localiza o botao Gerar
+    const generateBtn = page.locator('button.links-form__button, button:has-text("Gerar")').first();
     await generateBtn.waitFor({ state: 'visible', timeout: 10_000 });
 
-    // Aguarda ate 15s o botao ficar enabled
+    // Aguarda ate 30s o botao ficar enabled (ML valida a URL antes)
     let tries = 0;
-    while (tries < 30) {
-      const disabled = await generateBtn.isDisabled().catch(() => true);
-      if (!disabled) break;
+    let enabled = false;
+    while (tries < 60) {
+      const isDisabled = await generateBtn.evaluate((el: HTMLButtonElement) => {
+        return el.disabled || el.getAttribute('data-andes-state') === 'disabled' || el.classList.contains('andes-button--disabled');
+      }).catch(() => true);
+      if (!isDisabled) {
+        enabled = true;
+        break;
+      }
       await page.waitForTimeout(500);
       tries++;
     }
 
-    await generateBtn.click({ timeout: 10_000 });
-    console.log(`[LINK-GEN] botao Gerar clicado em ${Date.now() - t0}ms`);
+    if (!enabled) {
+      console.warn(`[LINK-GEN] botao Gerar nunca habilitou apos ${tries * 500}ms`);
+      return null;
+    }
 
-    await page.waitForTimeout(4000);
+    console.log(`[LINK-GEN] botao Gerar habilitou em ${Date.now() - t0}ms`);
+    await generateBtn.click({ timeout: 5_000 });
+    console.log('[LINK-GEN] botao clicado, aguardando link aparecer...');
+
+    await page.waitForTimeout(5000);
 
     // Tenta capturar o link gerado de varias formas
     const link = await page.evaluate(() => {
