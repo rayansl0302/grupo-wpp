@@ -10,6 +10,7 @@ import { mlOAuthRouter } from './modules/mercadolivre/ml-oauth.routes';
 import { whatsappRouter } from './modules/whatsapp/whatsapp.routes';
 import { campaignRouter } from './modules/campaigns/campaign.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
+import { servicesRouter } from './modules/services/services.routes';
 import { schedulerService } from './modules/scheduler/scheduler.service';
 import { whatsappService } from './modules/whatsapp/whatsapp.service';
 
@@ -37,6 +38,7 @@ async function bootstrap() {
   app.use('/whatsapp', requireAuth, whatsappRouter);
   app.use('/campaigns', requireAuth, campaignRouter);
   app.use('/dashboard', requireAuth, dashboardRouter);
+  app.use('/services', requireAuth, servicesRouter);
 
   // ─── SSE: QR Code em tempo real ──────────────────────────────────────────────
   app.get('/whatsapp/qr-stream', requireAuth, (req, res) => {

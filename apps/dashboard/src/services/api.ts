@@ -73,6 +73,26 @@ export const dashApi = {
   topProducts: () => api.get('/dashboard/top-products'),
 };
 
+export interface ServiceCheck {
+  id: string;
+  name: string;
+  category: 'infra' | 'integration' | 'auth';
+  status: 'ok' | 'warning' | 'error' | 'unknown';
+  message: string;
+  panelUrl: string;
+  docsUrl?: string;
+  expiresAt?: string;
+  daysUntilExpire?: number;
+  meta?: Record<string, any>;
+}
+
+export const servicesApi = {
+  status: () => api.get<{
+    summary: { total: number; ok: number; warning: number; error: number };
+    services: ServiceCheck[];
+  }>('/services/status'),
+};
+
 export const campaignApi = {
   list: () => api.get<Campaign[]>('/campaigns'),
   get: (id: string) => api.get<Campaign>(`/campaigns/${id}`),
