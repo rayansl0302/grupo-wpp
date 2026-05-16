@@ -55,6 +55,23 @@ dashboardRouter.get('/history', async (req, res) => {
   res.json({ data: posts, total, page, pages: Math.ceil(total / limit) });
 });
 
+// GET /dashboard/history/:id — detalhes completos de um envio
+dashboardRouter.get('/history/:id', async (req, res) => {
+  try {
+    const post = await prisma.sentPost.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: {
+        product: true, // todos os campos do produto
+        group: { include: { session: { select: { name: true, phoneNumber: true } } } },
+        campaign: true,
+      },
+    });
+    res.json(post);
+  } catch (err: any) {
+    res.status(404).json({ error: 'Envio nao encontrado' });
+  }
+});
+
 // GET /dashboard/top-products — produtos mais enviados
 dashboardRouter.get('/top-products', async (_req, res) => {
   const top = await prisma.sentPost.groupBy({

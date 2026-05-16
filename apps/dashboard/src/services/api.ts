@@ -66,10 +66,50 @@ export const authApi = {
     api.post<{ token: string; user: { name: string; email: string } }>('/auth/login', { email, password }),
 };
 
+export interface SentPostDetail {
+  id: string;
+  message: string;
+  sentAt: string;
+  status: string;
+  error: string | null;
+  clicks: number;
+  product: {
+    id: string;
+    mlId: string;
+    title: string;
+    originalPrice: number | null;
+    salePrice: number;
+    discount: number | null;
+    thumbnail: string | null;
+    permalink: string;
+    affiliateUrl: string | null;
+    freeShipping: boolean;
+    seller: string | null;
+    soldCount: number | null;
+    rating: number | null;
+    category: string | null;
+    fetchedAt: string;
+  };
+  group: {
+    id: string;
+    name: string;
+    jid: string;
+    dailyLimit: number;
+    session: { name: string; phoneNumber: string | null };
+  };
+  campaign: {
+    id: string;
+    name: string;
+    templateType: string;
+    cronExpr: string;
+  };
+}
+
 export const dashApi = {
   stats: () => api.get<Stats>('/dashboard/stats'),
   chart: () => api.get<ChartPoint[]>('/dashboard/chart'),
   history: (page = 1) => api.get<{ data: SentPost[]; total: number; pages: number }>(`/dashboard/history?page=${page}`),
+  historyDetail: (id: string) => api.get<SentPostDetail>(`/dashboard/history/${id}`),
   topProducts: () => api.get('/dashboard/top-products'),
 };
 
