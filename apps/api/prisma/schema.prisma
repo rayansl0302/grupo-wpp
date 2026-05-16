@@ -22,6 +22,19 @@ model User {
 
 // ─── ML OAuth Tokens ──────────────────────────────────────────────────────────
 
+model AppLog {
+  id        String   @id @default(uuid())
+  level     String   // info | warn | error | debug
+  source    String   // crawler | campaign | whatsapp | linkgen | system
+  message   String   @db.Text
+  meta      String?  @db.Text // JSON serializado
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level])
+  @@index([source])
+}
+
 model MLToken {
   id           String   @id @default(uuid())
   mlUserId     String   @unique // ID do usuario no Mercado Livre

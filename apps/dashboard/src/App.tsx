@@ -8,6 +8,7 @@ import Groups from './pages/Groups';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import Services from './pages/Services';
+import Logs from './pages/Logs';
 
 function Layout({ onLogout }: { onLogout: () => void }) {
   return (
@@ -20,6 +21,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
           <Route path="/groups" element={<Groups />} />
           <Route path="/history" element={<History />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/logs" element={<Logs />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

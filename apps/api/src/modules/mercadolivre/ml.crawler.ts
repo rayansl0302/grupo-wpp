@@ -203,7 +203,8 @@ async function crawlUrl(url: string, params: MLSearchParams, retry = true): Prom
                 for (const entry of obj.itemListElement) {
                   const it = entry.item || entry;
                   const price = parseFloat(it.offers?.price || it.offers?.lowPrice || 0);
-                  if (it.name && it.url && price > 0) {
+                  // Filtra links de tracking
+                  if (it.name && it.url && price > 0 && !it.url.includes('click1.mercadolivre') && !it.url.includes('/mclics/')) {
                     items.push({
                       mlId: '',
                       title: it.name,

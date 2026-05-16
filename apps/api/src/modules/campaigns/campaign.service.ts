@@ -5,6 +5,7 @@ import { buildMessage, type TemplateType } from '../../shared/templates/message.
 import { isWithinActiveHours, chunkArray, backoffDelay } from '../../shared/utils/anti-ban';
 import { aiTextService } from '../ai/ai-text.service';
 import { logger } from '../../config/logger';
+import { log } from '../logs/app-logger';
 import type { Campaign, WhatsAppGroup } from '@prisma/client';
 
 export class CampaignService {
@@ -207,6 +208,14 @@ export class CampaignService {
 
           sent++;
           logger.info({ productId: product.id, groupId: group.id }, 'Produto enviado');
+          log.info('campaign', `Produto enviado: ${product.title.slice(0, 60)}`, {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            groupName: group.name,
+            productId: product.id,
+            price: product.salePrice,
+            discount: product.discount,
+          });
         } catch (err) {
           failed++;
           await prisma.sentPost.upsert({
@@ -223,6 +232,11 @@ export class CampaignService {
             },
           });
           logger.error({ err, productId: product.id }, 'Falha ao enviar produto');
+          log.error('campaign', `Falha ao enviar: ${product.title.slice(0, 60)}`, {
+            error: String(err).slice(0, 200),
+            productId: product.id,
+            campaignId: campaign.id,
+          });
           await backoffDelay(failed);
         }
       }

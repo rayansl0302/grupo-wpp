@@ -11,6 +11,8 @@ import { whatsappRouter } from './modules/whatsapp/whatsapp.routes';
 import { campaignRouter } from './modules/campaigns/campaign.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { servicesRouter } from './modules/services/services.routes';
+import { logsRouter } from './modules/logs/logs.routes';
+import { cleanupOldLogs, log } from './modules/logs/app-logger';
 import { schedulerService } from './modules/scheduler/scheduler.service';
 import { whatsappService } from './modules/whatsapp/whatsapp.service';
 
@@ -39,6 +41,7 @@ async function bootstrap() {
   app.use('/campaigns', requireAuth, campaignRouter);
   app.use('/dashboard', requireAuth, dashboardRouter);
   app.use('/services', requireAuth, servicesRouter);
+  app.use('/logs', requireAuth, logsRouter);
 
   // ─── SSE: QR Code em tempo real ──────────────────────────────────────────────
   app.get('/whatsapp/qr-stream', requireAuth, (req, res) => {
@@ -82,6 +85,18 @@ async function bootstrap() {
   await schedulerService.loadActiveCampaigns();
 
   // 0.0.0.0 e necessario pro Railway/Docker (nao usar localhost)
+  // Cron: limpa logs antigos (>24h) a cada hora
+  setInterval(async () => {
+    try {
+      const count = await cleanupOldLogs();
+      if (count > 0) console.log(`[LOG-CLEANUP] Apagou ${count} logs antigos`);
+    } catch (err: any) {
+      console.error('[LOG-CLEANUP] Erro:', err.message);
+    }
+  }, 60 * 60 * 1000);
+
+  log.info('system', 'API iniciada', { port: env.PORT, version: 'v1.3' });
+
   app.listen(env.PORT, '0.0.0.0', () => {
     logger.info(`API rodando na porta ${env.PORT}`);
   });

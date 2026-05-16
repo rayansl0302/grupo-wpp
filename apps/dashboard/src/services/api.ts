@@ -93,6 +93,27 @@ export const servicesApi = {
   }>('/services/status'),
 };
 
+export interface AppLog {
+  id: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  source: string;
+  message: string;
+  meta: any;
+  createdAt: string;
+}
+
+export const logsApi = {
+  list: (params?: { level?: string; source?: string; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.level) search.set('level', params.level);
+    if (params?.source) search.set('source', params.source);
+    if (params?.limit) search.set('limit', String(params.limit));
+    return api.get<{ total: number; showing: number; logs: AppLog[] }>(`/logs?${search}`);
+  },
+  summary: () => api.get<{ total: number; byLevel: Record<string, number>; bySource: Record<string, number> }>('/logs/summary'),
+  clear: () => api.delete('/logs'),
+};
+
 export const campaignApi = {
   list: () => api.get<Campaign[]>('/campaigns'),
   get: (id: string) => api.get<Campaign>(`/campaigns/${id}`),

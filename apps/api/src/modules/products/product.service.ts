@@ -20,6 +20,12 @@ export class ProductService {
         where: {
           title: { contains: params.query, mode: 'insensitive' },
           fetchedAt: { gte: TWO_HOURS_AGO },
+          // Filtra produtos com URLs invalidas (legado do cache antigo)
+          NOT: [
+            { permalink: { contains: 'click1.mercadolivre' } },
+            { permalink: { contains: '/mclics/' } },
+          ],
+          permalink: { contains: 'MLB' },
         },
         orderBy: { fetchedAt: 'desc' },
         take: 20,
