@@ -12,13 +12,24 @@ function formatPrice(value: number): string {
 function ProductDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [detail, setDetail] = useState<SentPostDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    dashApi.historyDetail(id).then((res) => {
-      setDetail(res.data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    dashApi.historyDetail(id)
+      .then((res) => {
+        setDetail(res.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        const status = err?.response?.status;
+        if (status === 404) {
+          setError('Endpoint nao encontrado. Aguarde o redeploy do Railway terminar (~5min) e tente de novo.');
+        } else {
+          setError(`Erro ${status || ''}: ${err?.response?.data?.error || err?.message || 'desconhecido'}`);
+        }
+        setLoading(false);
+      });
   }, [id]);
 
   const copy = (text: string, label: string) => {
@@ -43,6 +54,14 @@ function ProductDetailModal({ id, onClose }: { id: string; onClose: () => void }
 
         {loading && (
           <div className="p-10 text-center text-gray-500">Carregando...</div>
+        )}
+
+        {!loading && error && (
+          <div className="p-10 text-center">
+            <AlertCircle size={32} className="text-red-400 mx-auto mb-3" />
+            <p className="text-red-300 text-sm mb-2">Não foi possível carregar os detalhes</p>
+            <p className="text-gray-500 text-xs">{error}</p>
+          </div>
         )}
 
         {detail && (
