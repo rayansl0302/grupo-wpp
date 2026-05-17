@@ -8,6 +8,19 @@ import { logger } from '../../config/logger';
 import { log } from '../logs/app-logger';
 import type { Campaign, WhatsAppGroup } from '@prisma/client';
 
+/**
+ * Verifica se o link e o "oficial" gerado pelo painel ML
+ * (meli.la/XXX, /sec/XXX, /social/XXX).
+ * Links manuais com matt_word sao considerados fallback.
+ */
+function isOfficialAffiliateLink(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return /meli\.la\//i.test(url) || /\/sec\//i.test(url) || /\/social\//i.test(url);
+}
+
+/** Se REQUIRE_OFFICIAL_LINK=true, descarta produtos sem link oficial */
+const REQUIRE_OFFICIAL_LINK = process.env.REQUIRE_OFFICIAL_LINK === 'true';
+
 export class CampaignService {
   /**
    * Executa uma campanha: busca produtos e envia para todos os grupos ativos.
@@ -85,7 +98,23 @@ export class CampaignService {
     );
 
     if (products.length === 0) return { sent: 0, failed: 0 };
-    const product = products[0];
+
+    // Se REQUIRE_OFFICIAL_LINK estiver ligado, filtra produtos sem link oficial
+    const eligible = REQUIRE_OFFICIAL_LINK
+      ? products.filter((p) => isOfficialAffiliateLink(p.affiliateUrl))
+      : products;
+
+    if (eligible.length === 0) {
+      console.log('[TEST] Nenhum produto com link oficial - todos cairam no fallback matt_word');
+      log.warn('campaign', '[TESTE] Nenhum produto com link oficial', {
+        campaignId: campaign.id,
+        triedProducts: products.length,
+        REQUIRE_OFFICIAL_LINK,
+      });
+      return { sent: 0, failed: 0 };
+    }
+
+    const product = eligible[0];
 
     const affiliateUrl = product.affiliateUrl ?? product.permalink;
     const message = buildMessage(product, affiliateUrl, campaign.templateType as TemplateType);
@@ -159,11 +188,38 @@ export class CampaignService {
       return { sent: 0, failed: 0 };
     }
 
+    // Se REQUIRE_OFFICIAL_LINK ativado, filtra produtos sem link oficial (meli.la/sec/social)
+    const eligibleProducts = REQUIRE_OFFICIAL_LINK
+      ? products.filter((p) => {
+          const ok = isOfficialAffiliateLink(p.affiliateUrl);
+          if (!ok) console.log(`[CAMPAIGN] Descartado (sem link oficial): ${p.title?.slice(0, 60)}`);
+          return ok;
+        })
+      : products;
+
+    if (eligibleProducts.length === 0) {
+      console.log(`[CAMPAIGN] Nenhum produto com link oficial - LinkGenerator pode estar com problema`);
+      log.warn('campaign', 'Todos produtos cairam no fallback matt_word - LinkGen falhou', {
+        campaignId: campaign.id,
+        keyword,
+        tried: products.length,
+      });
+      return { sent: 0, failed: 0 };
+    }
+
+    if (eligibleProducts.length < products.length) {
+      log.warn('campaign', `${products.length - eligibleProducts.length} produto(s) descartado(s) por falta de link oficial`, {
+        campaignId: campaign.id,
+        kept: eligibleProducts.length,
+        dropped: products.length - eligibleProducts.length,
+      });
+    }
+
     let sent = 0;
     let failed = 0;
 
     // Envia em lotes de 2 produtos para não parecer spam
-    const batches = chunkArray(products, 2);
+    const batches = chunkArray(eligibleProducts, 2);
 
     for (const batch of batches) {
       for (const product of batch) {
