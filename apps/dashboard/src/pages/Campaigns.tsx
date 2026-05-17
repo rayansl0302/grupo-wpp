@@ -1,35 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Play, Pause, Trash2, PlayCircle, Plus, Pencil, FlaskConical } from 'lucide-react';
 import { campaignApi, groupApi, type Campaign, type Group } from '../services/api';
+import CronBuilder, { CRON_PRESETS } from '../components/CronBuilder';
 
-const CRON_OPTIONS: { value: string; label: string; hint?: string }[] = [
-  // Nichos com 2 horarios espalhados (recomendados para anti-ban)
-  { value: '0 9,19 * * *', label: '📱 Tech (9h e 19h)', hint: 'Cafe da manha + fim do expediente' },
-  { value: '0 11,17 * * *', label: '🏠 Casa (11h e 17h)', hint: 'Pre-almoco + saida do trabalho' },
-  { value: '0 7,21 * * *', label: '💪 Fitness (7h e 21h)', hint: 'Antes do treino + planejando dia' },
-  { value: '0 10,20 * * *', label: '💄 Beleza (10h e 20h)', hint: 'Meio-manha + fim do dia' },
-  { value: '0 8,16 * * *', label: '🔧 Ferramentas (8h e 16h)', hint: 'Antes da obra + meio tarde' },
-  { value: '0 13,18 * * *', label: '👟 Moda & Calçados (13h e 18h)', hint: 'Almoço + saída do trabalho' },
-  { value: '0 14,22 * * *', label: '🎮 Games & Gamer (14h e 22h)', hint: 'Pós-almoço + antes de dormir' },
-  { value: '0 12,15 * * *', label: '🐶 Pets (12h e 15h)', hint: 'Donos em casa no almoço + tarde' },
-  // Frequentes (CUIDADO com anti-ban se tiver muitos grupos)
-  { value: '*/30 * * * *', label: '⚡ A cada 30 minutos', hint: 'ATENCAO: muito frequente, risco de ban' },
-  { value: '*/20 * * * *', label: '⚡⚡ A cada 20 minutos', hint: 'ATENCAO: alto risco de ban, use so em chip secundario' },
-  // Outros padroes uteis
-  { value: '0 */2 * * *', label: 'A cada 2 horas' },
-  { value: '0 */3 * * *', label: 'A cada 3 horas' },
-  { value: '0 */4 * * *', label: 'A cada 4 horas' },
-  { value: '0 9,12,18,21 * * *', label: '4x ao dia (9h/12h/18h/21h)' },
-  { value: '0 8,12,16,20 * * *', label: '4x ao dia (8h/12h/16h/20h)' },
-  { value: '0 9 * * *', label: 'Uma vez (9h)' },
-  { value: '0 12 * * *', label: 'Uma vez (12h)' },
-  { value: '0 18 * * *', label: 'Uma vez (18h)' },
-  { value: '0 21 * * *', label: 'Uma vez (21h)' },
+// Concatena todos os presets pra label da lista
+const ALL_PRESETS = [
+  ...CRON_PRESETS.nichos,
+  ...CRON_PRESETS.frequentes,
+  ...CRON_PRESETS.pacotes,
 ];
 
+function describeCron(expr: string): string {
+  if (/^\*\/(\d+) \* \* \* \*$/.test(expr)) {
+    const m = expr.match(/^\*\/(\d+)/);
+    return `A cada ${m?.[1]}min`;
+  }
+  if (/^(\d+) \* \* \* \*$/.test(expr)) {
+    const m = expr.match(/^(\d+)/);
+    return `Toda hora :${m?.[1]?.padStart(2, '0')}`;
+  }
+  return expr;
+}
+
 function CronLabel({ expr }: { expr: string }) {
-  const found = CRON_OPTIONS.find((o) => o.value === expr);
-  return <span className="text-xs text-gray-500">{found?.label ?? expr}</span>;
+  const found = ALL_PRESETS.find((o) => o.value === expr);
+  return <span className="text-xs text-gray-500">{found?.label ?? describeCron(expr)}</span>;
 }
 
 const EMPTY_FORM = {
@@ -221,18 +216,12 @@ export default function Campaigns() {
               <input type="number" className="input" placeholder="Ex: 500" value={form.maxPrice}
                 onChange={(e) => setForm({ ...form, maxPrice: e.target.value })} />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-xs text-gray-400 mb-1.5">Agendamento (cron)</label>
-              <select className="input" value={form.cronExpr}
-                onChange={(e) => setForm({ ...form, cronExpr: e.target.value })}>
-                {CRON_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value} title={o.hint}>{o.label}</option>
-                ))}
-              </select>
-              {(() => {
-                const found = CRON_OPTIONS.find((o) => o.value === form.cronExpr);
-                return found?.hint ? <p className="text-xs text-gray-500 mt-1">{found.hint}</p> : null;
-              })()}
+              <CronBuilder
+                value={form.cronExpr}
+                onChange={(cron) => setForm({ ...form, cronExpr: cron })}
+              />
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Template</label>

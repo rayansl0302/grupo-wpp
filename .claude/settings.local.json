@@ -15,7 +15,8 @@
       "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('base64url'\\)\\)\")",
       "Bash(npm install *)",
       "Bash(npx prisma *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git check-ignore *)"
     ]
   }
 }
