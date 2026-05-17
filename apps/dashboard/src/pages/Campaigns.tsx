@@ -10,8 +10,15 @@ const CRON_OPTIONS: { value: string; label: string; hint?: string }[] = [
   { value: '0 10,20 * * *', label: '💄 Beleza (10h e 20h)', hint: 'Meio-manha + fim do dia' },
   { value: '0 8,16 * * *', label: '🔧 Ferramentas (8h e 16h)', hint: 'Antes da obra + meio tarde' },
   { value: '0 13,18 * * *', label: '👟 Moda & Calçados (13h e 18h)', hint: 'Almoço + saída do trabalho' },
+  { value: '0 14,22 * * *', label: '🎮 Games & Gamer (14h e 22h)', hint: 'Pós-almoço + antes de dormir' },
+  { value: '0 12,15 * * *', label: '🐶 Pets (12h e 15h)', hint: 'Donos em casa no almoço + tarde' },
+  // Frequentes (CUIDADO com anti-ban se tiver muitos grupos)
+  { value: '*/30 * * * *', label: '⚡ A cada 30 minutos', hint: 'ATENCAO: muito frequente, risco de ban' },
+  { value: '*/20 * * * *', label: '⚡⚡ A cada 20 minutos', hint: 'ATENCAO: alto risco de ban, use so em chip secundario' },
   // Outros padroes uteis
   { value: '0 */2 * * *', label: 'A cada 2 horas' },
+  { value: '0 */3 * * *', label: 'A cada 3 horas' },
+  { value: '0 */4 * * *', label: 'A cada 4 horas' },
   { value: '0 9,12,18,21 * * *', label: '4x ao dia (9h/12h/18h/21h)' },
   { value: '0 8,12,16,20 * * *', label: '4x ao dia (8h/12h/16h/20h)' },
   { value: '0 9 * * *', label: 'Uma vez (9h)' },
