@@ -1,4 +1,5 @@
 import { chromium, Browser, BrowserContext } from 'playwright';
+import { log } from '../logs/app-logger';
 
 function makeProxy() {
   if (!process.env.PROXY_USERNAME || !process.env.PROXY_PASSWORD) return undefined;
@@ -120,6 +121,12 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
 
     if (!hasTextarea || title.toLowerCase().includes('login')) {
       console.warn('[LINK-GEN] Pagina nao tem textarea ou caiu no login. Sessao expirou?');
+      log.error('linkgen', 'Sessao ML expirou - renovar ML_STORAGE_STATE', {
+        currentUrl,
+        title,
+        hasTextarea,
+        productUrl: productUrl.slice(0, 100),
+      });
       return null;
     }
 
@@ -168,6 +175,10 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
 
     if (!enabled) {
       console.warn(`[LINK-GEN] botao Gerar nunca habilitou apos ${tries * 500}ms`);
+      log.warn('linkgen', `Botao Gerar nunca habilitou apos ${tries * 500}ms`, {
+        productUrl: productUrl.slice(0, 100),
+        title: await page.title(),
+      });
       return null;
     }
 
@@ -203,6 +214,9 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
 
     if (link) {
       console.log(`[LINK-GEN] Link gerado em ${Date.now() - t0}ms: ${link.slice(0, 80)}`);
+      log.info('linkgen', `Link oficial gerado em ${Date.now() - t0}ms`, {
+        link: link.slice(0, 120),
+      });
       return link;
     }
 
@@ -210,6 +224,11 @@ export async function generateAffiliateLink(productUrl: string): Promise<string 
     console.warn('[LINK-GEN] Nao achou link na pagina. Verifique seletores.');
     const html = await page.content();
     console.log(`[LINK-GEN] HTML length: ${html.length}, body inicio: ${html.slice(0, 500)}`);
+    log.error('linkgen', 'Nao encontrou link gerado na pagina apos clicar Gerar', {
+      htmlLength: html.length,
+      bodyStart: html.slice(0, 300),
+      productUrl: productUrl.slice(0, 100),
+    });
     return null;
   } catch (err: any) {
     console.error('[LINK-GEN] Erro:', err?.message);
