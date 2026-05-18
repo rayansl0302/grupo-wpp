@@ -6,6 +6,33 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 
 ---
 
+## [v1.3-stable] — 2026-05-17
+
+### ✨ Adicionado
+- **Aba "Serviços"** com health check em tempo real dos 11 serviços externos
+- **Aba "Logs"** com auto-cleanup de 24h e filtros por level/source
+- **Modal de detalhes** no histórico (preço, links, mensagem, metadata)
+- **Edição inline de grupos** via modal (nome + dailyLimit)
+- **CronBuilder visual** com 5 modos (preset, minuto-X, cada-X-min, horários, custom)
+- **2 novos nichos:** 🎮 Games e 🐶 Pets
+- **REQUIRE_OFFICIAL_LINK** env var pra descartar produtos sem link oficial
+- **Logs persistentes do LinkGenerator** pra diagnosticar falhas
+- **Documentação completa** em `docs/` (8 arquivos)
+- **Endpoint /dashboard/history/:id** retorna todos os campos do produto
+
+### 🐛 Corrigido
+- `.gitignore` ignorava pasta `apps/api/src/modules/logs/` por padrão `logs/`
+- Cache do banco enviando produtos com URL `click1.mercadolivre.com.br`
+- Vercel 404 ao recarregar rota SPA (vercel.json com rewrite)
+- JSON-LD fallback do crawler também filtra `click1`
+
+### ⚙️ Mudado
+- Cron presets agora têm 3 categorias (Nichos / Frequentes / Pacotes)
+- Crons frequentes adicionados: 10, 15, 20, 30 min + 3h, 4h, 6h
+- Templates de mensagem podem ser editados por campanha
+
+---
+
 ## [v1.2-stable] — 2026-05-15
 
 ### ✨ Adicionado
