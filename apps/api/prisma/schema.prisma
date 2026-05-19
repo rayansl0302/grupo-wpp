@@ -22,6 +22,45 @@ model User {
 
 // ─── ML OAuth Tokens ──────────────────────────────────────────────────────────
 
+// ─── Cupons (descontos via cupom de loja) ─────────────────────────────────────
+
+model Coupon {
+  id           String   @id @default(uuid())
+  externalId   String   @unique // ID na origem (ML)
+  code         String?  // codigo do cupom (CUPOMXYZ)
+  title        String
+  description  String?  @db.Text
+  discount     String?  // "10% OFF", "R$ 20 OFF", etc (texto livre)
+  thumbnail    String?
+  url          String   // URL pra aplicar o cupom
+  affiliateUrl String?  // URL com matt_word
+  store        String?  // Nome da loja/categoria
+  category     String?
+  validUntil   DateTime?
+  fetchedAt    DateTime @default(now())
+
+  sentCoupons SentCoupon[]
+}
+
+model SentCoupon {
+  id         String   @id @default(uuid())
+  couponId   String
+  groupId    String
+  campaignId String?  // opcional - cupons podem ser enviados manualmente
+  sessionId  String
+  message    String   @db.Text
+  sentAt     DateTime @default(now())
+  status     String   @default("sent") // sent | failed
+  error      String?  @db.Text
+
+  coupon  Coupon          @relation(fields: [couponId], references: [id])
+  group   WhatsAppGroup   @relation(fields: [groupId], references: [id])
+  session WhatsAppSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([couponId, groupId])
+  @@index([sentAt])
+}
+
 model AppLog {
   id        String   @id @default(uuid())
   level     String   // info | warn | error | debug
@@ -58,8 +97,9 @@ model WhatsAppSession {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  groups    WhatsAppGroup[]
-  sentPosts SentPost[]
+  groups      WhatsAppGroup[]
+  sentPosts   SentPost[]
+  sentCoupons SentCoupon[]
 }
 
 // ─── WhatsApp Groups / Channels ───────────────────────────────────────────────
@@ -74,9 +114,10 @@ model WhatsAppGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  session   WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  campaigns CampaignGroup[]
-  sentPosts SentPost[]
+  session     WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  campaigns   CampaignGroup[]
+  sentPosts   SentPost[]
+  sentCoupons SentCoupon[]
 
   @@unique([jid, sessionId])
 }
@@ -116,7 +157,8 @@ model Campaign {
   minPrice     Float?
   freeShipping Boolean  @default(false)
   cronExpr     String   @default("0 */2 * * *") // a cada 2h
-  templateType String   @default("standard")   // standard | hype | minimal
+  templateType String   @default("standard")   // standard | hype | minimal | flash | coupon | social-profile
+  contentType  String   @default("product")    // product | coupon | mixed | social-profile
   useAI        Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

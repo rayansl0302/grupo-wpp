@@ -50,12 +50,138 @@ export class CampaignService {
       .filter((g) => g.active && g.session.status === 'connected');
 
     for (const group of activeGroups) {
-      const { sent, failed } = await this.sendToGroup(campaign, group, keyword);
-      totalSent += sent;
-      totalFailed += failed;
+      // Roteamento baseado no contentType da campanha
+      const contentType = (campaign as any).contentType || 'product';
+
+      let result: { sent: number; failed: number };
+      if (contentType === 'coupon') {
+        result = await this.sendCouponToGroup(campaign, group);
+      } else if (contentType === 'social-profile') {
+        result = await this.sendSocialProfileToGroup(campaign, group);
+      } else if (contentType === 'mixed') {
+        // 50/50 entre produto e cupom
+        if (Math.random() < 0.5) {
+          result = await this.sendCouponToGroup(campaign, group);
+        } else {
+          result = await this.sendToGroup(campaign, group, keyword);
+        }
+      } else {
+        // 'product' (default)
+        result = await this.sendToGroup(campaign, group, keyword);
+      }
+
+      totalSent += result.sent;
+      totalFailed += result.failed;
     }
 
     return { sent: totalSent, failed: totalFailed };
+  }
+
+  /**
+   * Envia 1 cupom aleatorio (ainda nao enviado) pro grupo.
+   */
+  private async sendCouponToGroup(
+    campaign: Campaign,
+    group: WhatsAppGroup & { session: { name: string } },
+  ): Promise<{ sent: number; failed: number }> {
+    const { couponService } = await import('../coupons/coupon.service');
+    const { buildCouponMessage } = await import('../../shared/templates/coupon.template');
+
+    // Checa limite diario
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sentToday = await prisma.sentPost.count({
+      where: { groupId: group.id, sentAt: { gte: today } },
+    });
+    if (sentToday >= group.dailyLimit) {
+      return { sent: 0, failed: 0 };
+    }
+
+    const coupon = await couponService.getRandomForGroup(group.id);
+    if (!coupon) {
+      log.warn('campaign', 'Sem cupons disponiveis para enviar', { groupId: group.id });
+      return { sent: 0, failed: 0 };
+    }
+
+    const affiliateUrl = coupon.affiliateUrl || coupon.url;
+    const message = buildCouponMessage(coupon, affiliateUrl);
+
+    try {
+      if (coupon.thumbnail) {
+        await whatsappService.sendImageWithCaption(group.session.name, group.jid, coupon.thumbnail, message);
+      } else {
+        await whatsappService.sendText(group.session.name, group.jid, message);
+      }
+
+      await prisma.sentCoupon.upsert({
+        where: { couponId_groupId: { couponId: coupon.id, groupId: group.id } },
+        update: { status: 'sent', sentAt: new Date(), error: null, message },
+        create: {
+          couponId: coupon.id,
+          groupId: group.id,
+          campaignId: campaign.id,
+          sessionId: group.sessionId,
+          message,
+          status: 'sent',
+        },
+      });
+
+      log.info('campaign', `Cupom enviado: ${coupon.title.slice(0, 60)}`, {
+        campaignId: campaign.id,
+        couponId: coupon.id,
+        groupName: group.name,
+      });
+      return { sent: 1, failed: 0 };
+    } catch (err: any) {
+      log.error('campaign', 'Falha ao enviar cupom', {
+        error: String(err).slice(0, 200),
+        couponId: coupon.id,
+      });
+      return { sent: 0, failed: 1 };
+    }
+  }
+
+  /**
+   * Envia link do perfil social do afiliado com produtos em destaque.
+   */
+  private async sendSocialProfileToGroup(
+    campaign: Campaign,
+    group: WhatsAppGroup & { session: { name: string } },
+  ): Promise<{ sent: number; failed: number }> {
+    const { buildSocialProfileMessage } = await import('../../shared/templates/social-profile.template');
+
+    const username = process.env.ML_AFFILIATE_USERNAME || process.env.ML_AFFILIATE_ID;
+    if (!username) {
+      log.warn('campaign', 'ML_AFFILIATE_USERNAME nao configurado', {});
+      return { sent: 0, failed: 0 };
+    }
+
+    const profileUrl = `https://www.mercadolivre.com.br/social/${username}`;
+
+    // Pega 4 produtos recentes pra destaque (cache do banco)
+    const highlights = await prisma.product.findMany({
+      orderBy: { fetchedAt: 'desc' },
+      take: 4,
+      where: { permalink: { contains: 'MLB' } },
+    });
+
+    const message = buildSocialProfileMessage(profileUrl, highlights);
+
+    try {
+      await whatsappService.sendText(group.session.name, group.jid, message);
+
+      log.info('campaign', 'Perfil social enviado', {
+        campaignId: campaign.id,
+        groupName: group.name,
+        highlightsCount: highlights.length,
+      });
+      return { sent: 1, failed: 0 };
+    } catch (err: any) {
+      log.error('campaign', 'Falha ao enviar perfil social', {
+        error: String(err).slice(0, 200),
+      });
+      return { sent: 0, failed: 1 };
+    }
   }
 
   /**

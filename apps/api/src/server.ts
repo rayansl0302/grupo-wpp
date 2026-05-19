@@ -12,6 +12,7 @@ import { campaignRouter } from './modules/campaigns/campaign.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { servicesRouter } from './modules/services/services.routes';
 import { logsRouter } from './modules/logs/logs.routes';
+import { couponRouter } from './modules/coupons/coupon.routes';
 import { cleanupOldLogs, log } from './modules/logs/app-logger';
 import { schedulerService } from './modules/scheduler/scheduler.service';
 import { whatsappService } from './modules/whatsapp/whatsapp.service';
@@ -42,6 +43,7 @@ async function bootstrap() {
   app.use('/dashboard', requireAuth, dashboardRouter);
   app.use('/services', requireAuth, servicesRouter);
   app.use('/logs', requireAuth, logsRouter);
+  app.use('/coupons', requireAuth, couponRouter);
 
   // ─── SSE: QR Code em tempo real ──────────────────────────────────────────────
   app.get('/whatsapp/qr-stream', requireAuth, (req, res) => {

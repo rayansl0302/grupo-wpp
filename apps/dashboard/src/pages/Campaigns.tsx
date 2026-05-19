@@ -35,6 +35,7 @@ const EMPTY_FORM = {
   freeShipping: false,
   cronExpr: '0 */2 * * *',
   templateType: 'standard' as Campaign['templateType'],
+  contentType: 'product' as NonNullable<Campaign['contentType']>,
   useAI: false,
   groupIds: [] as string[],
 };
@@ -126,6 +127,7 @@ export default function Campaigns() {
       freeShipping: c.freeShipping,
       cronExpr: c.cronExpr,
       templateType: c.templateType as Campaign['templateType'],
+      contentType: (c.contentType || 'product') as NonNullable<Campaign['contentType']>,
       useAI: c.useAI,
       groupIds: c.groups?.map((cg: any) => cg.groupId ?? cg.group?.id).filter(Boolean) ?? [],
     });
@@ -232,6 +234,22 @@ export default function Campaigns() {
                 <option value="minimal">Minimal</option>
                 <option value="flash">Flash</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Tipo de conteudo</label>
+              <select className="input" value={form.contentType}
+                onChange={(e) => setForm({ ...form, contentType: e.target.value as NonNullable<Campaign['contentType']> })}>
+                <option value="product">🛒 Produtos (padrao)</option>
+                <option value="coupon">🎟️ Cupons de desconto</option>
+                <option value="mixed">🎲 Misto (50/50 produtos+cupons)</option>
+                <option value="social-profile">👤 Perfil de afiliado (pagina)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {form.contentType === 'product' && 'Envia produtos individuais com link de afiliado'}
+                {form.contentType === 'coupon' && 'Envia cupons de desconto do ML'}
+                {form.contentType === 'mixed' && 'Alterna entre produtos e cupons'}
+                {form.contentType === 'social-profile' && 'Envia link do seu perfil com produtos em destaque'}
+              </p>
             </div>
             <div className="md:col-span-2 flex gap-4 items-center">
               <label className="flex items-center gap-2 text-sm cursor-pointer">

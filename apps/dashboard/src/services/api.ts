@@ -46,9 +46,30 @@ export interface Campaign {
   id: string; name: string; active: boolean; cronExpr: string;
   templateType: string; useAI: boolean; minDiscount: number;
   freeShipping: boolean; keywords: string; categories: string;
+  contentType?: 'product' | 'coupon' | 'mixed' | 'social-profile';
   _count?: { sentPosts: number };
   groups: Array<{ group: { name: string; jid: string } }>;
 }
+
+export interface CouponItem {
+  id: string;
+  externalId: string;
+  code: string | null;
+  title: string;
+  description: string | null;
+  discount: string | null;
+  thumbnail: string | null;
+  url: string;
+  affiliateUrl: string | null;
+  store: string | null;
+  validUntil: string | null;
+  fetchedAt: string;
+}
+
+export const couponsApi = {
+  list: () => api.get<CouponItem[]>('/coupons'),
+  refresh: () => api.post<{ count: number; coupons: CouponItem[] }>('/coupons/refresh'),
+};
 
 export interface Group {
   id: string; jid: string; name: string; active: boolean;
