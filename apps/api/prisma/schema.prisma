@@ -127,7 +127,8 @@ model WhatsAppGroup {
 
 model Product {
   id            String   @id @default(uuid())
-  mlId          String   @unique  // ID do produto no ML
+  provider      String   @default("ml") // ml | shopee | amazon (futuro)
+  mlId          String   @unique  // ID do produto na origem (ML ou Shopee)
   title         String
   originalPrice Float?
   salePrice     Float
@@ -160,6 +161,7 @@ model Campaign {
   cronExpr     String   @default("0 */2 * * *") // a cada 2h
   templateType String   @default("standard")   // standard | hype | minimal | flash | coupon | social-profile
   contentType  String   @default("product")    // product | coupon | mixed | social-profile
+  provider     String   @default("ml")          // ml | shopee | amazon
   useAI        Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

@@ -36,6 +36,7 @@ const EMPTY_FORM = {
   cronExpr: '0 */2 * * *',
   templateType: 'standard' as Campaign['templateType'],
   contentType: 'product' as NonNullable<Campaign['contentType']>,
+  provider: 'ml' as NonNullable<Campaign['provider']>,
   useAI: false,
   groupIds: [] as string[],
 };
@@ -128,6 +129,7 @@ export default function Campaigns() {
       cronExpr: c.cronExpr,
       templateType: c.templateType as Campaign['templateType'],
       contentType: (c.contentType || 'product') as NonNullable<Campaign['contentType']>,
+      provider: (c.provider || 'ml') as NonNullable<Campaign['provider']>,
       useAI: c.useAI,
       groupIds: c.groups?.map((cg: any) => cg.groupId ?? cg.group?.id).filter(Boolean) ?? [],
     });
@@ -234,6 +236,18 @@ export default function Campaigns() {
                 <option value="minimal">Minimal</option>
                 <option value="flash">Flash</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Fonte (Marketplace)</label>
+              <select className="input" value={form.provider}
+                onChange={(e) => setForm({ ...form, provider: e.target.value as NonNullable<Campaign['provider']> })}>
+                <option value="ml">🟡 Mercado Livre</option>
+                <option value="shopee">🟠 Shopee</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {form.provider === 'shopee' && 'Requer SHOPEE_APP_ID + SHOPEE_APP_SECRET no Railway'}
+                {form.provider === 'ml' && 'Mercado Livre - via scraping com proxy BR'}
+              </p>
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Tipo de conteudo</label>

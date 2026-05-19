@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { mlService } from '../mercadolivre/ml.service';
 import { generateAffiliateLink } from '../mercadolivre/ml.link-generator';
+import { searchByProvider, type Provider } from './product.dispatcher';
 import { shortenUrl } from '../../shared/utils/url-shortener';
 import { logger } from '../../config/logger';
 import type { MLSearchParams } from '../mercadolivre/ml.types';
@@ -8,25 +9,33 @@ import type { Product } from '@prisma/client';
 
 export class ProductService {
   /**
-   * Busca novos produtos do ML, persiste no banco e retorna apenas os que
+   * Busca novos produtos do provider, persiste no banco e retorna apenas os que
    * ainda não foram enviados para o grupo informado.
    */
-  async fetchAndFilter(params: MLSearchParams, groupId: string): Promise<Product[]> {
+  async fetchAndFilter(
+    params: MLSearchParams,
+    groupId: string,
+    provider: Provider = 'ml',
+  ): Promise<Product[]> {
     // CACHE: se ja temos produtos dessa keyword recentes (<2h), reusa do banco
     // Economiza banda do proxy e evita rate limit do ML
     const TWO_HOURS_AGO = new Date(Date.now() - 2 * 60 * 60 * 1000);
     if (params.query) {
+      const cacheWhere: any = {
+        title: { contains: params.query, mode: 'insensitive' },
+        fetchedAt: { gte: TWO_HOURS_AGO },
+        provider,
+      };
+      if (provider === 'ml') {
+        cacheWhere.NOT = [
+          { permalink: { contains: 'click1.mercadolivre' } },
+          { permalink: { contains: '/mclics/' } },
+        ];
+        cacheWhere.permalink = { contains: 'MLB' };
+      }
+
       const cached = await prisma.product.findMany({
-        where: {
-          title: { contains: params.query, mode: 'insensitive' },
-          fetchedAt: { gte: TWO_HOURS_AGO },
-          // Filtra produtos com URLs invalidas (legado do cache antigo)
-          NOT: [
-            { permalink: { contains: 'click1.mercadolivre' } },
-            { permalink: { contains: '/mclics/' } },
-          ],
-          permalink: { contains: 'MLB' },
-        },
+        where: cacheWhere,
         orderBy: { fetchedAt: 'desc' },
         take: 20,
       });
@@ -43,7 +52,7 @@ export class ProductService {
       }
     }
 
-    const rawProducts = await mlService.searchProducts(params);
+    const rawProducts = await searchByProvider(provider, params);
 
     // Produtos já enviados para este grupo
     const alreadySent = new Set(
@@ -59,25 +68,34 @@ export class ProductService {
     const seenProductIds = new Set<string>();
 
     for (const raw of rawProducts) {
-      // 1a tentativa: link bonito via painel de afiliado (se ML_STORAGE_STATE estiver setado)
+      let affiliatePermalink: string;
       let officialLink: string | null = null;
-      if (process.env.ML_STORAGE_STATE) {
-        officialLink = await generateAffiliateLink(raw.permalink).catch(() => null);
-      }
+      let linkOrigin: string = 'MANUAL';
 
-      // Fallback: monta manualmente com matt_word
-      const affiliatePermalink = officialLink ?? mlService.buildAffiliateUrl(raw.permalink);
-      console.log(`[PRODUCT] origem: ${officialLink ? 'OFICIAL (painel)' : 'MANUAL (matt_word)'}`);
+      if (provider === 'shopee') {
+        // Shopee ja retorna offerLink (link de afiliado) direto na busca
+        affiliatePermalink = raw.permalink;
+        linkOrigin = 'SHOPEE_API';
+      } else {
+        // ML: tenta gerar link bonito (meli.la) via painel, senao usa matt_word manual
+        if (process.env.ML_STORAGE_STATE) {
+          officialLink = await generateAffiliateLink(raw.permalink).catch(() => null);
+        }
+        affiliatePermalink = officialLink ?? mlService.buildAffiliateUrl(raw.permalink);
+        linkOrigin = officialLink ? 'ML_OFICIAL' : 'ML_MANUAL';
+      }
+      console.log(`[PRODUCT] origem: ${linkOrigin}`);
       console.log(`[PRODUCT] link: ${affiliatePermalink.slice(0, 100)}`);
 
-      // So encurta links manuais - oficiais ja vem encurtados (meli.la)
-      const affiliateUrl = officialLink
-        ? officialLink
-        : await shortenUrl(affiliatePermalink).catch(() => affiliatePermalink);
+      // So encurta se for ML manual (oficiais e Shopee ja vem prontos)
+      const affiliateUrl = linkOrigin === 'ML_MANUAL'
+        ? await shortenUrl(affiliatePermalink).catch(() => affiliatePermalink)
+        : affiliatePermalink;
 
       const product = await prisma.product.upsert({
         where: { mlId: raw.mlId },
         update: {
+          provider,
           salePrice: raw.salePrice,
           originalPrice: raw.originalPrice,
           discount: raw.discount,
@@ -88,6 +106,7 @@ export class ProductService {
           fetchedAt: new Date(),
         },
         create: {
+          provider,
           mlId: raw.mlId,
           title: raw.title,
           salePrice: raw.salePrice,

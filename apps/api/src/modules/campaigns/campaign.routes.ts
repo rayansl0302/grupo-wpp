@@ -17,6 +17,7 @@ const campaignSchema = z.object({
   cronExpr: z.string().default('0 */2 * * *'),
   templateType: z.enum(['standard', 'hype', 'minimal', 'flash']).default('standard'),
   contentType: z.enum(['product', 'coupon', 'mixed', 'social-profile']).default('product'),
+  provider: z.enum(['ml', 'shopee']).default('ml'),
   useAI: z.boolean().default(false),
   groupIds: z.array(z.string()),
 });

@@ -211,6 +211,7 @@ export class CampaignService {
     const { buildMessage } = await import('../../shared/templates/message.template');
     const { whatsappService } = await import('../whatsapp/whatsapp.service');
 
+    const provider = ((campaign as any).provider || 'ml') as 'ml' | 'shopee';
     const products = await productService.fetchAndFilter(
       {
         query: keyword,
@@ -221,6 +222,7 @@ export class CampaignService {
         limit: 1,
       },
       group.id,
+      provider,
     );
 
     if (products.length === 0) return { sent: 0, failed: 0 };
@@ -296,6 +298,7 @@ export class CampaignService {
 
     const remaining = group.dailyLimit - sentToday;
 
+    const provider = ((campaign as any).provider || 'ml') as 'ml' | 'shopee';
     const products = await productService.fetchAndFilter(
       {
         query: keyword,
@@ -306,6 +309,7 @@ export class CampaignService {
         limit: Math.min(remaining, 5),
       },
       group.id,
+      provider,
     );
 
     if (products.length === 0) {

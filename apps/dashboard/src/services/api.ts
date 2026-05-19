@@ -62,6 +62,7 @@ export interface Campaign {
   templateType: string; useAI: boolean; minDiscount: number;
   freeShipping: boolean; keywords: string; categories: string;
   contentType?: 'product' | 'coupon' | 'mixed' | 'social-profile';
+  provider?: 'ml' | 'shopee';
   _count?: { sentPosts: number };
   groups: Array<{ group: { name: string; jid: string } }>;
 }
