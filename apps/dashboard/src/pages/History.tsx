@@ -397,7 +397,7 @@ export default function History() {
           </tbody>
         </table>
 
-        {posts.length === 0 && (
+        {items.length === 0 && (
           <p className="text-center text-gray-600 py-12">Nenhum envio registrado ainda.</p>
         )}
 

@@ -17,7 +17,8 @@
       "Bash(npx prisma *)",
       "WebSearch",
       "Bash(git check-ignore *)",
-      "Bash(git tag *)"
+      "Bash(git tag *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
