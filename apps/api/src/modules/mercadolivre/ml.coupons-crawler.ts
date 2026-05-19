@@ -14,6 +14,16 @@ function makeProxy() {
   };
 }
 
+function getStorageState(): any | null {
+  const b64 = process.env.ML_STORAGE_STATE;
+  if (!b64 || b64.length < 100) return null;
+  try {
+    return JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
+  } catch {
+    return null;
+  }
+}
+
 export interface RawCoupon {
   externalId: string;
   title: string;
@@ -23,15 +33,25 @@ export interface RawCoupon {
   thumbnail: string | null;
   url: string;
   store: string | null;
+  validUntil: string | null;
+  budget: string | null;
 }
 
 /**
- * Crawler da pagina de cupons do Mercado Livre.
- * URL: https://www.mercadolivre.com.br/cupons
+ * Crawler da pagina autenticada de cupons do programa de afiliados.
+ * URL: https://www.mercadolivre.com.br/afiliados/coupons#hub
+ *
+ * Requer ML_STORAGE_STATE configurado (cookies do painel).
  */
-export async function crawlCoupons(limit = 20): Promise<RawCoupon[]> {
+export async function crawlCoupons(limit = 30): Promise<RawCoupon[]> {
+  const storageState = getStorageState();
+  if (!storageState) {
+    console.warn('[COUPONS] ML_STORAGE_STATE nao configurado - nao consegue acessar painel autenticado');
+    return [];
+  }
+
   const proxy = makeProxy();
-  console.log(`[COUPONS] Iniciando crawler ${proxy ? '(com proxy BR)' : '(sem proxy)'}`);
+  console.log(`[COUPONS] Iniciando crawler autenticado ${proxy ? '(com proxy BR)' : ''}`);
 
   const browser: Browser = await chromium.launch({
     headless: true,
@@ -47,6 +67,7 @@ export async function crawlCoupons(limit = 20): Promise<RawCoupon[]> {
   let context: BrowserContext | null = null;
   try {
     context = await browser.newContext({
+      storageState,
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },
       locale: 'pt-BR',
@@ -57,96 +78,126 @@ export async function crawlCoupons(limit = 20): Promise<RawCoupon[]> {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-    // Bloqueia recursos pesados pra economizar banda
+    // Bloqueia recursos pesados (mas mantém scripts/xhr pra react funcionar)
     await context.route('**/*', (route) => {
       const type = route.request().resourceType();
-      if (['image', 'media', 'font', 'stylesheet'].includes(type)) return route.abort();
+      if (['image', 'media', 'font'].includes(type)) return route.abort();
       return route.continue();
     });
 
     const page = await context.newPage();
-    const url = 'https://www.mercadolivre.com.br/cupons';
+    const url = 'https://www.mercadolivre.com.br/afiliados/coupons';
 
     console.log(`[COUPONS] GET ${url}`);
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    console.log(`[COUPONS] Status: ${resp?.status()}`);
+    console.log(`[COUPONS] Status inicial: ${resp?.status()}`);
 
-    await page.waitForTimeout(3000);
+    // Aguarda redirect/renderizacao
+    await page.waitForTimeout(4000);
+    await page.waitForLoadState('networkidle').catch(() => {});
+
+    const finalUrl = page.url();
+    const title = await page.title();
+    console.log(`[COUPONS] URL final: ${finalUrl}`);
+    console.log(`[COUPONS] Title: "${title}"`);
+
+    if (finalUrl.includes('/login') || title.toLowerCase().includes('login')) {
+      console.warn('[COUPONS] Sessao ML expirou - renovar ML_STORAGE_STATE');
+      return [];
+    }
 
     const coupons = await page.evaluate(() => {
       const items: any[] = [];
 
-      // Estrategia 1: cards de cupom (estrutura varia)
+      // Pega TODOS os elementos que parecem cards de cupom
+      // O painel ML usa Andes UI, então tem classes específicas
       const cards = document.querySelectorAll(
-        '.cupons-coupon, .coupons-card, [class*="coupon-card"], [class*="cupom"]',
+        '[class*="coupon-card"], [class*="couponCard"], [class*="card-coupon"], ' +
+        'article, [class*="andes-card"][role], .available-coupons-list > div, ' +
+        '[class*="coupon"][class*="item"]'
       );
+
+      console.log(`[CARDS-FOUND] ${cards.length}`);
 
       cards.forEach((el, idx) => {
         try {
-          const title = el.querySelector('h2, h3, .title, [class*="title"]')?.textContent?.trim() || '';
-          const description = el.querySelector('p, .description, [class*="description"]')?.textContent?.trim() || '';
-          const discount = el.querySelector('[class*="discount"], [class*="off"], .badge')?.textContent?.trim() || '';
-          const code = el.querySelector('[class*="code"], [data-code], input[readonly]')?.textContent?.trim() || '';
-          const link = (el.querySelector('a[href]') as HTMLAnchorElement | null)?.href || '';
-          const img = el.querySelector('img');
-          const thumbnail = (img?.getAttribute('data-src') || img?.getAttribute('src') || '') as string;
-          const store = el.querySelector('[class*="store"], [class*="brand"], [class*="seller"]')?.textContent?.trim() || '';
+          const text = el.textContent || '';
 
-          if (title || description) {
-            items.push({
-              externalId: `coupon-${Date.now()}-${idx}`,
-              title: title || description.slice(0, 60),
-              description,
-              code,
-              discount,
-              thumbnail,
-              url: link,
-              store,
-            });
-          }
+          // Procura padrão "R$ X OFF" ou "X% OFF" no texto do card
+          const discountMatch = text.match(/R\$\s*([\d.,]+)\s*OFF/i) || text.match(/(\d+)%\s*OFF/i);
+          if (!discountMatch) return;
+
+          const discount = discountMatch[0].trim();
+
+          // Loja / "Em produtos de XXX"
+          const storeMatch = text.match(/Em produtos de\s+([^\n]+?)(?:\s*Ver produtos|\s*$)/i);
+          const store = storeMatch?.[1]?.trim() || null;
+
+          // Validade
+          const validMatch = text.match(/Vence em\s+(\d+\s+de\s+\w+)/i);
+          const validUntil = validMatch?.[1] || null;
+
+          // Orcamento
+          const budgetMatch = text.match(/Or[çc]amento[^:]*:?\s*R\$\s*([\d.,]+)/i);
+          const budget = budgetMatch?.[1] || null;
+
+          // Link pra ver produtos (geralmente onde levaria o cupom)
+          const link = (el.querySelector('a[href*="MLB"], a[href*="meli.la"]') as HTMLAnchorElement | null)?.href || '';
+
+          // Codigo (se ja foi gerado, pode aparecer)
+          const codeMatch = text.match(/CUPOM[A-Z0-9]+|[A-Z]{3,}\d+/);
+          const code = codeMatch?.[0] || null;
+
+          // Titulo composto: "R$ 30 OFF em produtos de Darklab"
+          const title = store ? `${discount} em produtos de ${store}` : discount;
+          const description = validUntil ? `Vence em ${validUntil}` : null;
+
+          // ID unico (combina store + discount + validade)
+          const externalId = `aff-${(store || 'generic').toLowerCase().replace(/\s+/g, '-')}-${discount.replace(/\s+/g, '')}-${validUntil || idx}`
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '');
+
+          items.push({
+            externalId,
+            title,
+            description,
+            code,
+            discount,
+            thumbnail: null,
+            url: link,
+            store,
+            validUntil,
+            budget,
+          });
         } catch {}
       });
-
-      // Estrategia 2: JSON-LD se nao achou cards
-      if (items.length === 0) {
-        document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
-          try {
-            const json = JSON.parse(el.textContent || '{}');
-            const list = Array.isArray(json) ? json : [json];
-            for (const obj of list) {
-              if (obj['@type'] === 'Offer' || obj['@type'] === 'PromotionalOffer') {
-                items.push({
-                  externalId: obj.identifier || `ld-${Date.now()}-${Math.random()}`,
-                  title: obj.name || '',
-                  description: obj.description || '',
-                  code: obj.couponCode || null,
-                  discount: obj.discount || null,
-                  thumbnail: obj.image || null,
-                  url: obj.url || '',
-                  store: obj.seller?.name || null,
-                });
-              }
-            }
-          } catch {}
-        });
-      }
 
       return items;
     });
 
     console.log(`[COUPONS] Extraidos: ${coupons.length} cupons`);
 
-    // Dedup por externalId/url
+    // Dedup por externalId
     const seen = new Set<string>();
     const unique: RawCoupon[] = [];
     for (const c of coupons) {
-      const key = c.externalId || c.url || c.title;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (seen.has(c.externalId)) continue;
+      seen.add(c.externalId);
       unique.push(c);
     }
 
     console.log(`[COUPONS] Apos dedup: ${unique.length} cupons unicos`);
+
+    if (unique.length === 0) {
+      // Debug: log HTML pra ajustar seletores
+      const html = await page.content();
+      console.log(`[COUPONS] DEBUG HTML length: ${html.length}`);
+      const sampleText = await page.evaluate(() =>
+        document.body.innerText.slice(0, 500),
+      );
+      console.log(`[COUPONS] DEBUG sample text: ${sampleText.replace(/\n/g, ' | ')}`);
+    }
+
     return unique.slice(0, limit);
   } catch (err: any) {
     console.error(`[COUPONS] Erro: ${err?.message}`);

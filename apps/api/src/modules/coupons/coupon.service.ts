@@ -38,30 +38,54 @@ class CouponService {
     const saved: Coupon[] = [];
     for (const r of raw) {
       try {
-        const affiliateUrl = mlService.buildAffiliateUrl(r.url);
+        const affiliateUrl = r.url ? mlService.buildAffiliateUrl(r.url) : null;
+        // Tenta parsear "1 de junho" pra date (best effort)
+        let validUntilDate: Date | null = null;
+        if (r.validUntil) {
+          const m = r.validUntil.match(/(\d+)\s+de\s+(\w+)/i);
+          if (m) {
+            const months: Record<string, number> = {
+              janeiro: 0, fevereiro: 1, marco: 2, março: 2, abril: 3, maio: 4, junho: 5,
+              julho: 6, agosto: 7, setembro: 8, outubro: 9, novembro: 10, dezembro: 11,
+            };
+            const month = months[m[2].toLowerCase()];
+            if (month !== undefined) {
+              const now = new Date();
+              const year = now.getMonth() > month ? now.getFullYear() + 1 : now.getFullYear();
+              validUntilDate = new Date(year, month, parseInt(m[1]));
+            }
+          }
+        }
+
+        const description = [r.description, r.budget ? `Orçamento restante: R$ ${r.budget}` : null]
+          .filter(Boolean)
+          .join(' · ');
+
         const coupon = await prisma.coupon.upsert({
           where: { externalId: r.externalId },
           update: {
             title: r.title,
-            description: r.description,
+            description: description || null,
             code: r.code,
             discount: r.discount,
             thumbnail: r.thumbnail,
             url: r.url,
             affiliateUrl,
             store: r.store,
+            validUntil: validUntilDate,
             fetchedAt: new Date(),
           },
           create: {
             externalId: r.externalId,
             title: r.title,
-            description: r.description,
+            description: description || null,
             code: r.code,
             discount: r.discount,
             thumbnail: r.thumbnail,
             url: r.url,
             affiliateUrl,
             store: r.store,
+            validUntil: validUntilDate,
           },
         });
         saved.push(coupon);
