@@ -53,9 +53,10 @@ model SentCoupon {
   status     String   @default("sent") // sent | failed
   error      String?  @db.Text
 
-  coupon  Coupon          @relation(fields: [couponId], references: [id])
-  group   WhatsAppGroup   @relation(fields: [groupId], references: [id])
-  session WhatsAppSession @relation(fields: [sessionId], references: [id])
+  coupon   Coupon          @relation(fields: [couponId], references: [id])
+  group    WhatsAppGroup   @relation(fields: [groupId], references: [id])
+  session  WhatsAppSession @relation(fields: [sessionId], references: [id])
+  campaign Campaign?       @relation(fields: [campaignId], references: [id])
 
   @@unique([couponId, groupId])
   @@index([sentAt])
@@ -163,9 +164,10 @@ model Campaign {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  groups    CampaignGroup[]
-  sentPosts SentPost[]
-  schedules Schedule[]
+  groups      CampaignGroup[]
+  sentPosts   SentPost[]
+  sentCoupons SentCoupon[]
+  schedules   Schedule[]
 }
 
 model CampaignGroup {
