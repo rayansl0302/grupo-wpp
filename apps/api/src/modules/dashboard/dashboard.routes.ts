@@ -32,16 +32,15 @@ dashboardRouter.get('/stats', async (_req, res) => {
   });
 });
 
-// GET /dashboard/history — histórico de envios paginado
+// GET /dashboard/history — histórico unificado (produtos + cupons) paginado
 dashboardRouter.get('/history', async (req, res) => {
   const page = Number(req.query.page ?? 1);
   const limit = Number(req.query.limit ?? 20);
-  const skip = (page - 1) * limit;
+  const filterType = req.query.type as string | undefined; // 'product' | 'coupon' | undefined (todos)
 
-  const [posts, total] = await Promise.all([
-    prisma.sentPost.findMany({
-      skip,
-      take: limit,
+  const [posts, postsTotal, coupons, couponsTotal] = await Promise.all([
+    filterType === 'coupon' ? [] : prisma.sentPost.findMany({
+      take: limit * page,
       orderBy: { sentAt: 'desc' },
       include: {
         product: { select: { title: true, salePrice: true, discount: true, thumbnail: true } },
@@ -49,24 +48,106 @@ dashboardRouter.get('/history', async (req, res) => {
         campaign: { select: { name: true } },
       },
     }),
-    prisma.sentPost.count(),
+    filterType === 'coupon' ? 0 : prisma.sentPost.count(),
+    filterType === 'product' ? [] : prisma.sentCoupon.findMany({
+      take: limit * page,
+      orderBy: { sentAt: 'desc' },
+      include: {
+        coupon: { select: { title: true, discount: true, code: true, thumbnail: true, store: true } },
+        group: { select: { name: true } },
+        campaign: { select: { name: true } },
+      },
+    }),
+    filterType === 'product' ? 0 : prisma.sentCoupon.count(),
   ]);
 
-  res.json({ data: posts, total, page, pages: Math.ceil(total / limit) });
+  // Normaliza pra formato unificado e ordena por sentAt desc
+  type UnifiedItem = {
+    id: string;
+    type: 'product' | 'coupon';
+    sentAt: Date;
+    status: string;
+    error: string | null;
+    title: string;
+    subtitle: string;
+    thumbnail: string | null;
+    groupName: string;
+    campaignName: string | null;
+    discount: number | string | null;
+  };
+
+  const unified: UnifiedItem[] = [
+    ...(posts as any[]).map((p) => ({
+      id: p.id,
+      type: 'product' as const,
+      sentAt: p.sentAt,
+      status: p.status,
+      error: p.error,
+      title: p.product?.title || '—',
+      subtitle: p.product?.salePrice ? `R$ ${p.product.salePrice.toFixed(2)}` : '—',
+      thumbnail: p.product?.thumbnail || null,
+      groupName: p.group?.name || '—',
+      campaignName: p.campaign?.name || null,
+      discount: p.product?.discount ?? null,
+    })),
+    ...(coupons as any[]).map((c) => ({
+      id: c.id,
+      type: 'coupon' as const,
+      sentAt: c.sentAt,
+      status: c.status,
+      error: c.error,
+      title: c.coupon?.title || '—',
+      subtitle: c.coupon?.store ? `🏪 ${c.coupon.store}` : (c.coupon?.code ? `🎟️ ${c.coupon.code}` : '—'),
+      thumbnail: c.coupon?.thumbnail || null,
+      groupName: c.group?.name || '—',
+      campaignName: c.campaign?.name || null,
+      discount: c.coupon?.discount ?? null,
+    })),
+  ];
+
+  // Ordena combinado e pagina
+  unified.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+  const total = (postsTotal as number) + (couponsTotal as number);
+  const skip = (page - 1) * limit;
+  const paginated = unified.slice(skip, skip + limit);
+
+  res.json({
+    data: paginated,
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+    counts: { products: postsTotal, coupons: couponsTotal },
+  });
 });
 
-// GET /dashboard/history/:id — detalhes completos de um envio
+// GET /dashboard/history/:id — detalhes completos de um envio (produto OU cupom)
 dashboardRouter.get('/history/:id', async (req, res) => {
+  // Tenta encontrar como produto primeiro
   try {
-    const post = await prisma.sentPost.findUniqueOrThrow({
+    const post = await prisma.sentPost.findUnique({
       where: { id: req.params.id },
       include: {
-        product: true, // todos os campos do produto
+        product: true,
         group: { include: { session: { select: { name: true, phoneNumber: true } } } },
         campaign: true,
       },
     });
-    res.json(post);
+    if (post) {
+      return res.json({ ...post, type: 'product' });
+    }
+  } catch {}
+
+  // Senao, tenta como cupom
+  try {
+    const sentCoupon = await prisma.sentCoupon.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: {
+        coupon: true,
+        group: { include: { session: { select: { name: true, phoneNumber: true } } } },
+        campaign: true,
+      },
+    });
+    return res.json({ ...sentCoupon, type: 'coupon' });
   } catch (err: any) {
     res.status(404).json({ error: 'Envio nao encontrado' });
   }

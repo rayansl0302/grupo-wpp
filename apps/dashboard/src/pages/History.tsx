@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle, XCircle, ChevronLeft, ChevronRight, X,
-  ExternalLink, Copy, Tag, Truck, Star, ShoppingCart, AlertCircle,
+  ExternalLink, Copy, Tag, Truck, Star, ShoppingCart, AlertCircle, Ticket, Package,
 } from 'lucide-react';
-import { dashApi, type SentPost, type SentPostDetail } from '../services/api';
+import { dashApi, type SentPostDetail, type HistoryItem } from '../services/api';
 
 function formatPrice(value: number): string {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function ProductDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
-  const [detail, setDetail] = useState<SentPostDetail | null>(null);
+  const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -64,7 +64,63 @@ function ProductDetailModal({ id, onClose }: { id: string; onClose: () => void }
           </div>
         )}
 
-        {detail && (
+        {detail && detail.type === 'coupon' && (
+          <div className="p-5 space-y-4">
+            <div className="flex gap-4">
+              {detail.coupon?.thumbnail && (
+                <img src={detail.coupon.thumbnail} alt="" className="w-32 h-32 rounded-lg object-cover bg-gray-800" />
+              )}
+              <div className="flex-1">
+                <div className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-full inline-block mb-2">
+                  🎟️ CUPOM
+                </div>
+                <h3 className="font-semibold text-white text-base">{detail.coupon?.title}</h3>
+                {detail.coupon?.description && (
+                  <p className="text-sm text-gray-400 mt-1">{detail.coupon.description}</p>
+                )}
+                <div className="mt-3 space-y-1 text-sm">
+                  {detail.coupon?.discount && (
+                    <p><span className="text-gray-500">Desconto:</span> <strong className="text-green-400">{detail.coupon.discount}</strong></p>
+                  )}
+                  {detail.coupon?.code && (
+                    <p><span className="text-gray-500">Código:</span> <code className="text-yellow-400">{detail.coupon.code}</code></p>
+                  )}
+                  {detail.coupon?.store && (
+                    <p><span className="text-gray-500">Loja:</span> {detail.coupon.store}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="card bg-black/30">
+              <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Mensagem enviada</p>
+              <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans bg-gray-950 p-3 rounded">
+                {detail.message}
+              </pre>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <Field label="Status" value={detail.status === 'sent' ? '✅ Enviado' : '❌ Falha'} />
+              <Field label="Enviado em" value={new Date(detail.sentAt).toLocaleString('pt-BR')} />
+              <Field label="Grupo" value={detail.group?.name || '—'} />
+              <Field label="Campanha" value={detail.campaign?.name || '—'} />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <a
+                href={detail.coupon?.affiliateUrl || detail.coupon?.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary text-sm flex items-center gap-2"
+              >
+                <ExternalLink size={14} /> Abrir cupom
+              </a>
+              <button onClick={onClose} className="btn-ghost text-sm">Fechar</button>
+            </div>
+          </div>
+        )}
+
+        {detail && (detail.type === 'product' || !detail.type) && detail.product && (
           <div className="p-5 space-y-5">
             {/* Imagem + Título + Preço */}
             <div className="flex gap-4">
@@ -230,20 +286,23 @@ function LinkRow({ label, url, onCopy, copied }: { label: string; url: string; o
 }
 
 export default function History() {
-  const [posts, setPosts] = useState<SentPost[]>([]);
+  const [items, setItems] = useState<HistoryItem[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ products: 0, coupons: 0 });
+  const [typeFilter, setTypeFilter] = useState<'all' | 'product' | 'coupon'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = async (p: number) => {
-    const res = await dashApi.history(p);
-    setPosts(res.data.data);
+    const res = await dashApi.history(p, typeFilter === 'all' ? undefined : typeFilter);
+    setItems(res.data.data);
     setPages(res.data.pages);
     setTotal(res.data.total);
+    setCounts(res.data.counts);
   };
 
-  useEffect(() => { load(page); }, [page]);
+  useEffect(() => { load(page); }, [page, typeFilter]);
 
   return (
     <div className="p-6 space-y-5">
@@ -254,11 +313,33 @@ export default function History() {
 
       {selectedId && <ProductDetailModal id={selectedId} onClose={() => setSelectedId(null)} />}
 
+      {/* Filtros de tipo */}
+      <div className="flex gap-2 text-sm">
+        <button
+          onClick={() => { setTypeFilter('all'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-md ${typeFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+        >
+          Todos ({counts.products + counts.coupons})
+        </button>
+        <button
+          onClick={() => { setTypeFilter('product'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'product' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+        >
+          <Package size={12} /> Produtos ({counts.products})
+        </button>
+        <button
+          onClick={() => { setTypeFilter('coupon'); setPage(1); }}
+          className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'coupon' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+        >
+          <Ticket size={12} /> Cupons ({counts.coupons})
+        </button>
+      </div>
+
       <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800 text-xs text-gray-500">
-              <th className="text-left px-4 py-3">Produto</th>
+              <th className="text-left px-4 py-3">Tipo / Conteúdo</th>
               <th className="text-left px-4 py-3 hidden md:table-cell">Grupo</th>
               <th className="text-left px-4 py-3 hidden lg:table-cell">Campanha</th>
               <th className="text-left px-4 py-3">Enviado em</th>
@@ -266,33 +347,46 @@ export default function History() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {posts.map((p) => (
+            {items.map((it) => (
               <tr
-                key={p.id}
-                onClick={() => setSelectedId(p.id)}
+                key={it.id}
+                onClick={() => setSelectedId(it.id)}
                 className="hover:bg-gray-800/50 transition-colors cursor-pointer"
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    {p.product.thumbnail && (
-                      <img src={p.product.thumbnail} alt="" className="w-8 h-8 rounded object-cover bg-gray-800" />
-                    )}
+                    <div className="flex-shrink-0">
+                      {it.thumbnail ? (
+                        <img src={it.thumbnail} alt="" className="w-8 h-8 rounded object-cover bg-gray-800" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-gray-800 flex items-center justify-center">
+                          {it.type === 'coupon' ? <Ticket size={14} className="text-yellow-400" /> : <Package size={14} className="text-gray-500" />}
+                        </div>
+                      )}
+                    </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-white truncate max-w-[200px]">{p.product.title}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatPrice(p.product.salePrice)}
-                        {p.product.discount ? ` · ${p.product.discount}% OFF` : ''}
+                      <div className="flex items-center gap-1.5">
+                        {it.type === 'coupon' && (
+                          <span className="text-[10px] bg-yellow-900/40 text-yellow-300 px-1.5 py-0.5 rounded">CUPOM</span>
+                        )}
+                        <p className="font-medium text-white truncate max-w-[260px]">{it.title}</p>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">
+                        {it.subtitle}
+                        {it.discount && (typeof it.discount === 'number'
+                          ? ` · ${it.discount}% OFF`
+                          : ` · ${it.discount}`)}
                       </p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 hidden md:table-cell text-gray-400">{p.group.name}</td>
-                <td className="px-4 py-3 hidden lg:table-cell text-gray-400">{p.campaign.name}</td>
+                <td className="px-4 py-3 hidden md:table-cell text-gray-400">{it.groupName}</td>
+                <td className="px-4 py-3 hidden lg:table-cell text-gray-400">{it.campaignName || '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
-                  {new Date(p.sentAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                  {new Date(it.sentAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                 </td>
                 <td className="px-4 py-3">
-                  {p.status === 'sent' ? (
+                  {it.status === 'sent' ? (
                     <span className="badge-green"><CheckCircle size={10} /> Enviado</span>
                   ) : (
                     <span className="badge-red"><XCircle size={10} /> Falha</span>

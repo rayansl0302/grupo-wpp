@@ -6,6 +6,27 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 
 ---
 
+## [v1.4-stable] — 2026-05-17
+
+### ✨ Adicionado
+- **Sistema de cupons completo** (Coupon + SentCoupon no schema)
+- **Crawler de cupons** (`mercadolivre.com.br/cupons`) com cache de 6h
+- **Template de mensagem de cupom** (com código, loja, desconto)
+- **Template de perfil social** do afiliado (link `/social/{username}` com produtos destaque)
+- **Campo `contentType`** na Campaign: `product` | `coupon` | `mixed` | `social-profile`
+- **Aba 🎟️ Cupons** no dashboard com listagem em grid
+- **Histórico unificado** (produtos + cupons na mesma timeline)
+- **Filtro por tipo** no histórico (Todos / Produtos / Cupons)
+- **Modal de detalhes** suporta cupom também
+- **Variável `ML_AFFILIATE_USERNAME`** pra perfil social customizado
+- **CLAUDE.md** na raiz pra contexto automático em sessões Claude Code
+
+### ⚙️ Mudado
+- `/dashboard/history` agora retorna feed unificado (produtos + cupons)
+- `/dashboard/history/:id` detecta tipo automaticamente
+
+---
+
 ## [v1.3-stable] — 2026-05-17
 
 ### ✨ Adicionado

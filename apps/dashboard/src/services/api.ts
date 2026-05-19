@@ -42,6 +42,21 @@ export interface SentPost {
   campaign: { name: string };
 }
 
+// Versao unificada (produto + cupom)
+export interface HistoryItem {
+  id: string;
+  type: 'product' | 'coupon';
+  sentAt: string;
+  status: string;
+  error: string | null;
+  title: string;
+  subtitle: string;
+  thumbnail: string | null;
+  groupName: string;
+  campaignName: string | null;
+  discount: number | string | null;
+}
+
 export interface Campaign {
   id: string; name: string; active: boolean; cronExpr: string;
   templateType: string; useAI: boolean; minDiscount: number;
@@ -129,7 +144,10 @@ export interface SentPostDetail {
 export const dashApi = {
   stats: () => api.get<Stats>('/dashboard/stats'),
   chart: () => api.get<ChartPoint[]>('/dashboard/chart'),
-  history: (page = 1) => api.get<{ data: SentPost[]; total: number; pages: number }>(`/dashboard/history?page=${page}`),
+  history: (page = 1, type?: 'product' | 'coupon') =>
+    api.get<{ data: HistoryItem[]; total: number; pages: number; counts: { products: number; coupons: number } }>(
+      `/dashboard/history?page=${page}${type ? `&type=${type}` : ''}`,
+    ),
   historyDetail: (id: string) => api.get<SentPostDetail>(`/dashboard/history/${id}`),
   topProducts: () => api.get('/dashboard/top-products'),
 };

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Megaphone, Users, History,
-  Settings, LogOut, Zap, Plug, FileText,
+  Settings, LogOut, Zap, Plug, FileText, Ticket,
 } from 'lucide-react';
 
 interface Props { onLogout: () => void }
@@ -10,6 +10,7 @@ const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/campaigns', label: 'Campanhas', icon: Megaphone },
   { to: '/groups', label: 'Grupos', icon: Users },
+  { to: '/coupons', label: 'Cupons', icon: Ticket },
   { to: '/history', label: 'Histórico', icon: History },
   { to: '/services', label: 'Serviços', icon: Plug },
   { to: '/logs', label: 'Logs', icon: FileText },

@@ -16,7 +16,8 @@
       "Bash(npm install *)",
       "Bash(npx prisma *)",
       "WebSearch",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git tag *)"
     ]
   }
 }
