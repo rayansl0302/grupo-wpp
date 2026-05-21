@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Pause, Trash2, PlayCircle, Plus, Pencil, FlaskConical } from 'lucide-react';
+import { Play, Pause, Trash2, PlayCircle, Plus, Pencil, FlaskConical, Copy } from 'lucide-react';
 import { campaignApi, groupApi, type Campaign, type Group } from '../services/api';
 import CronBuilder, { CRON_PRESETS } from '../components/CronBuilder';
 
@@ -101,6 +101,26 @@ export default function Campaigns() {
     if (!confirm('Excluir campanha?')) return;
     await campaignApi.delete(id);
     load();
+  };
+
+  const handleDuplicate = async (c: Campaign) => {
+    // Se a campanha eh ML, pergunta se quer clonar como Shopee (e vice-versa)
+    const currentProvider = (c.provider || 'ml') as 'ml' | 'shopee';
+    const otherProvider = currentProvider === 'ml' ? 'shopee' : 'ml';
+    const otherLabel = otherProvider === 'shopee' ? 'Shopee' : 'Mercado Livre';
+
+    const choice = confirm(
+      `Duplicar "${c.name}" como ${otherLabel}?\n\n` +
+      `OK = clonar pra ${otherLabel}\n` +
+      `Cancelar = clonar mantendo ${currentProvider === 'ml' ? 'ML' : 'Shopee'} (apenas cópia)`,
+    );
+
+    try {
+      await campaignApi.duplicate(c.id, choice ? otherProvider : undefined);
+      load();
+    } catch (err: any) {
+      alert(`Erro ao duplicar: ${err?.response?.data?.error || err.message}`);
+    }
   };
 
   // ─── Abrir form (novo OU edicao) ──────────────────────────────────────────
@@ -359,39 +379,80 @@ export default function Campaigns() {
 
       {/* Lista de campanhas */}
       <div className="space-y-3">
-        {campaigns.map((c) => (
-          <div key={c.id} className="card flex items-center gap-4">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.active ? 'bg-brand-500' : 'bg-gray-600'}`} />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-white truncate">{c.name}</p>
-              <div className="flex items-center gap-3 mt-0.5">
-                <CronLabel expr={c.cronExpr} />
-                <span className="text-xs text-gray-500">{c._count?.sentPosts ?? 0} envios</span>
-                <span className="text-xs text-gray-600">{c.templateType}</span>
-                <span className="text-xs text-gray-600">{c.groups?.length ?? 0} grupo(s)</span>
+        {campaigns.map((c) => {
+          const provider = (c.provider || 'ml') as 'ml' | 'shopee';
+          const contentType = c.contentType || 'product';
+          return (
+            <div key={c.id} className="card flex items-center gap-4">
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.active ? 'bg-brand-500' : 'bg-gray-600'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium text-white truncate">{c.name}</p>
+                  {/* Badge de provider */}
+                  {provider === 'ml' ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">
+                      🟡 ML
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30">
+                      🟠 Shopee
+                    </span>
+                  )}
+                  {/* Badge de tipo de conteúdo (só mostra se não for o padrão 'product') */}
+                  {contentType === 'coupon' && (
+                    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-300 border border-pink-500/30">
+                      🎟️ Cupom
+                    </span>
+                  )}
+                  {contentType === 'mixed' && (
+                    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                      🎲 Misto
+                    </span>
+                  )}
+                  {contentType === 'social-profile' && (
+                    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
+                      👤 Perfil
+                    </span>
+                  )}
+                  {!c.active && (
+                    <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/30">
+                      Pausada
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <CronLabel expr={c.cronExpr} />
+                  <span className="text-xs text-gray-500">{c._count?.sentPosts ?? 0} envios</span>
+                  <span className="text-xs text-gray-600">{c.templateType}</span>
+                  <span className="text-xs text-gray-600">{c.groups?.length ?? 0} grupo(s)</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => handleTest(c.id)} disabled={running === c.id}
+                  className="btn-ghost p-2 text-yellow-400 hover:text-yellow-300" title="Enviar 1 produto (teste rapido)">
+                  <FlaskConical size={16} className={running === c.id ? 'animate-pulse' : ''} />
+                </button>
+                <button onClick={() => handleRun(c.id)} disabled={running === c.id}
+                  className="btn-ghost p-2" title="Executar agora (envia varios)">
+                  <PlayCircle size={16} className={running === c.id ? 'text-brand-500 animate-pulse' : ''} />
+                </button>
+                <button onClick={() => handleDuplicate(c)} className="btn-ghost p-2 text-purple-400 hover:text-purple-300"
+                  title={`Duplicar (oferece clonar como ${provider === 'ml' ? 'Shopee' : 'ML'})`}>
+                  <Copy size={16} />
+                </button>
+                <button onClick={() => handleEdit(c)} className="btn-ghost p-2 text-blue-400 hover:text-blue-300" title="Editar">
+                  <Pencil size={16} />
+                </button>
+                <button onClick={() => handleToggle(c.id)} className="btn-ghost p-2" title={c.active ? 'Pausar' : 'Ativar'}>
+                  {c.active ? <Pause size={16} /> : <Play size={16} />}
+                </button>
+                <button onClick={() => handleDelete(c.id)} className="btn-ghost p-2 text-red-500 hover:text-red-400" title="Excluir">
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => handleTest(c.id)} disabled={running === c.id}
-                className="btn-ghost p-2 text-yellow-400 hover:text-yellow-300" title="Enviar 1 produto (teste rapido)">
-                <FlaskConical size={16} className={running === c.id ? 'animate-pulse' : ''} />
-              </button>
-              <button onClick={() => handleRun(c.id)} disabled={running === c.id}
-                className="btn-ghost p-2" title="Executar agora (envia varios)">
-                <PlayCircle size={16} className={running === c.id ? 'text-brand-500 animate-pulse' : ''} />
-              </button>
-              <button onClick={() => handleEdit(c)} className="btn-ghost p-2 text-blue-400 hover:text-blue-300" title="Editar">
-                <Pencil size={16} />
-              </button>
-              <button onClick={() => handleToggle(c.id)} className="btn-ghost p-2" title={c.active ? 'Pausar' : 'Ativar'}>
-                {c.active ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-              <button onClick={() => handleDelete(c.id)} className="btn-ghost p-2 text-red-500 hover:text-red-400" title="Excluir">
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {campaigns.length === 0 && (
           <p className="text-center text-gray-600 py-10">Nenhuma campanha. Crie uma acima.</p>
         )}

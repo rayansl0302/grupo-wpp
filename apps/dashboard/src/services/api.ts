@@ -204,6 +204,8 @@ export const campaignApi = {
   toggle: (id: string) => api.patch<Campaign>(`/campaigns/${id}/toggle`),
   run: (id: string) => api.post(`/campaigns/${id}/run`),
   test: (id: string) => api.post<{ sent: number; failed: number; product?: string }>(`/campaigns/${id}/test`),
+  duplicate: (id: string, overrideProvider?: 'ml' | 'shopee') =>
+    api.post<Campaign>(`/campaigns/${id}/duplicate`, overrideProvider ? { provider: overrideProvider } : {}),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
 };
 

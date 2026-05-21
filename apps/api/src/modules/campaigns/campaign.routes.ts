@@ -112,6 +112,56 @@ campaignRouter.patch('/:id', async (req, res) => {
   }
 });
 
+// POST /campaigns/:id/duplicate - clona campanha (pausada por padrao)
+campaignRouter.post('/:id/duplicate', async (req, res) => {
+  try {
+    const source = await prisma.campaign.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { groups: { select: { groupId: true } } },
+    });
+
+    // Permite override de provider via body (ex: { provider: 'shopee' })
+    // Util pra "clonar ML pra Shopee" em 1 clique
+    const overrideProvider = req.body?.provider as 'ml' | 'shopee' | undefined;
+    const newProvider = overrideProvider ?? source.provider;
+
+    // Sufixo no nome: se trocou provider, indica; senao "(cópia)"
+    const suffix =
+      overrideProvider && overrideProvider !== source.provider
+        ? ` (${overrideProvider === 'shopee' ? 'Shopee' : 'ML'})`
+        : ' (cópia)';
+
+    const duplicated = await prisma.campaign.create({
+      data: {
+        name: `${source.name}${suffix}`,
+        keywords: source.keywords,
+        categories: source.categories,
+        minDiscount: source.minDiscount,
+        maxPrice: source.maxPrice,
+        minPrice: source.minPrice,
+        freeShipping: source.freeShipping,
+        cronExpr: source.cronExpr,
+        templateType: source.templateType,
+        contentType: source.contentType,
+        provider: newProvider,
+        useAI: source.useAI,
+        active: false, // sempre pausada - usuario ativa quando quiser
+        groups: { create: source.groups.map((g) => ({ groupId: g.groupId })) },
+      },
+      include: {
+        groups: { include: { group: { select: { name: true, jid: true } } } },
+        _count: { select: { sentPosts: true } },
+      },
+    });
+
+    // Nao registra no scheduler - veio pausada
+    res.status(201).json(duplicated);
+  } catch (err: any) {
+    console.error('[CAMPAIGN] erro duplicate:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // PATCH /campaigns/:id/toggle
 campaignRouter.patch('/:id/toggle', async (req, res) => {
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: req.params.id } });
