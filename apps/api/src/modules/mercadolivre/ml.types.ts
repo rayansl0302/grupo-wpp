@@ -31,7 +31,7 @@ export interface MLNormalizedProduct {
   originalPrice: number | null;
   salePrice: number;
   discount: number | null;
-  thumbnail: string;
+  thumbnail: string | null;
   permalink: string;
   freeShipping: boolean;
   seller: string | null;
