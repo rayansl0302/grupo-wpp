@@ -24,7 +24,7 @@ export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct
     seller: p.shopName,
     soldCount: p.sales,
     rating: p.ratingStar > 0 ? p.ratingStar : null,
-    category: p.categoryName,
+    category: null, // Shopee productOfferV2 nao expoe categoria - pode ser puxado de outra query depois
   };
 }
 

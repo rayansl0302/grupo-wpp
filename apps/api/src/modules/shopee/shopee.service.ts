@@ -14,7 +14,7 @@ export interface ShopeeProduct {
   sales: number;
   ratingStar: number;
   shopName: string | null;
-  categoryName: string | null;
+  // NOTA: categoryName foi removido - nao existe no schema atual do productOfferV2
 }
 
 /**
@@ -47,7 +47,6 @@ class ShopeeService {
             sales
             ratingStar
             shopName
-            categoryName
           }
           pageInfo {
             page
