@@ -202,6 +202,46 @@ campaignRouter.get('/test-search', async (req, res) => {
   }
 });
 
+// GET /campaigns/test-shopee?q=fone -- testa Shopee API (rapido, sem proxy)
+campaignRouter.get('/test-shopee', async (req, res) => {
+  try {
+    const { shopeeService } = await import('../shopee/shopee.service');
+    const { shopeeClient } = await import('../shopee/shopee.client');
+    const q = (req.query.q as string) || 'fone bluetooth';
+
+    if (!shopeeClient.enabled) {
+      return res.status(503).json({
+        error: 'Shopee desativado',
+        reason: 'Faltam SHOPEE_APP_ID e/ou SHOPEE_APP_SECRET no Railway',
+        howToFix: 'Configure as duas env vars em Railway > Variables e faca redeploy',
+      });
+    }
+
+    const products = await shopeeService.searchProducts(q, 5);
+    res.json({
+      query: q,
+      count: products.length,
+      products: products.map((p) => ({
+        title: p.productName,
+        priceMin: p.priceMin,
+        priceMax: p.priceMax,
+        discount: p.priceDiscountRate,
+        thumbnail: p.imageUrl,
+        offerLink: p.offerLink,
+        shopName: p.shopName,
+        sales: p.sales,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: err.message,
+      hint: err.message?.includes('signature') || err.message?.includes('auth')
+        ? 'Provavelmente SHOPEE_APP_SECRET incorreto'
+        : undefined,
+    });
+  }
+});
+
 // POST /campaigns/:id/test - envia 1 produto aleatorio pra teste rapido
 campaignRouter.post('/:id/test', async (req, res) => {
   try {

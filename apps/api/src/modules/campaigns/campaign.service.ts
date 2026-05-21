@@ -21,6 +21,22 @@ function isOfficialAffiliateLink(url: string | null | undefined): boolean {
 /** Se REQUIRE_OFFICIAL_LINK=true, descarta produtos sem link oficial */
 const REQUIRE_OFFICIAL_LINK = process.env.REQUIRE_OFFICIAL_LINK === 'true';
 
+/**
+ * Cap de produtos buscados por execucao, por provider.
+ * Reduzir o ML diminui consumo de banda IPRoyal (proxy pago).
+ * Shopee usa API oficial gratuita - pode buscar mais.
+ *
+ * Defaults pensados pra estrategia "Shopee primario, ML magro":
+ *   ML_MAX_PER_RUN=1     -> 1 produto ML por execucao (economia maxima de proxy)
+ *   SHOPEE_MAX_PER_RUN=5 -> 5 produtos Shopee por execucao (volume alto, sem custo)
+ */
+const ML_MAX_PER_RUN = Number(process.env.ML_MAX_PER_RUN ?? 1);
+const SHOPEE_MAX_PER_RUN = Number(process.env.SHOPEE_MAX_PER_RUN ?? 5);
+
+function maxPerRun(provider: 'ml' | 'shopee'): number {
+  return provider === 'shopee' ? SHOPEE_MAX_PER_RUN : ML_MAX_PER_RUN;
+}
+
 export class CampaignService {
   /**
    * Executa uma campanha: busca produtos e envia para todos os grupos ativos.
@@ -299,6 +315,8 @@ export class CampaignService {
     const remaining = group.dailyLimit - sentToday;
 
     const provider = ((campaign as any).provider || 'ml') as 'ml' | 'shopee';
+    // Cap por provider: ML magro (1), Shopee gordo (5) - configuravel via env
+    const providerCap = maxPerRun(provider);
     const products = await productService.fetchAndFilter(
       {
         query: keyword,
@@ -306,7 +324,7 @@ export class CampaignService {
         maxPrice: campaign.maxPrice ?? undefined,
         minPrice: campaign.minPrice ?? undefined,
         freeShipping: campaign.freeShipping,
-        limit: Math.min(remaining, 5),
+        limit: Math.min(remaining, providerCap),
       },
       group.id,
       provider,
