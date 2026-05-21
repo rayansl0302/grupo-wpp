@@ -56,8 +56,8 @@ async function bootstrap() {
         count: products.length,
         products: products.map((p) => ({
           title: p.productName,
-          priceMin: p.priceMin / 100000, // Shopee usa preco em 10^-5
-          priceMax: p.priceMax / 100000,
+          priceMin: p.priceMin, // Shopee API retorna preco JA em reais
+          priceMax: p.priceMax,
           discount: p.priceDiscountRate,
           thumbnail: p.imageUrl,
           offerLink: p.offerLink,

@@ -6,7 +6,9 @@ import type { MLNormalizedProduct, MLSearchParams } from '../mercadolivre/ml.typ
  * Assim podemos reaproveitar todo o pipeline existente (cache, dedup, templates, etc).
  */
 export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct {
-  const salePrice = p.priceMin / 100000; // Shopee usa preco em "10^-5"
+  // Shopee API retorna preco JA em reais (testado em prod: priceMin=24.88 = R$ 24,88)
+  // Anteriormente assumi 10^-5 baseado em doc desatualizada - estava errado
+  const salePrice = p.priceMin;
   const discount = p.priceDiscountRate > 0 ? p.priceDiscountRate : null;
   const originalPrice = discount
     ? Math.round((salePrice / (1 - discount / 100)) * 100) / 100
