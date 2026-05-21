@@ -8,11 +8,13 @@ export interface ShopeeProduct {
   imageUrl: string | null;
   productLink: string;
   offerLink: string; // link de afiliado (curto)
-  priceMin: number;
-  priceMax: number;
-  priceDiscountRate: number;
-  sales: number;
-  ratingStar: number;
+  // ATENCAO: API Shopee as vezes retorna numericos como string (validado em prod).
+  // Tipo aceita ambos - sempre forcar Number() antes de usar.
+  priceMin: number | string;
+  priceMax: number | string;
+  priceDiscountRate: number | string;
+  sales: number | string;
+  ratingStar: number | string;
   shopName: string | null;
   // NOTA: categoryName foi removido - nao existe no schema atual do productOfferV2
 }

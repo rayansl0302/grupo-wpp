@@ -56,13 +56,14 @@ async function bootstrap() {
         count: products.length,
         products: products.map((p) => ({
           title: p.productName,
-          priceMin: p.priceMin, // Shopee API retorna preco JA em reais
-          priceMax: p.priceMax,
-          discount: p.priceDiscountRate,
+          // Shopee retorna como string as vezes - forcar Number
+          priceMin: Number(p.priceMin),
+          priceMax: Number(p.priceMax),
+          discount: Number(p.priceDiscountRate),
           thumbnail: p.imageUrl,
           offerLink: p.offerLink,
           shopName: p.shopName,
-          sales: p.sales,
+          sales: Number(p.sales),
         })),
       });
     } catch (err: any) {

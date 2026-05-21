@@ -6,10 +6,14 @@ import type { MLNormalizedProduct, MLSearchParams } from '../mercadolivre/ml.typ
  * Assim podemos reaproveitar todo o pipeline existente (cache, dedup, templates, etc).
  */
 export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct {
-  // Shopee API retorna preco JA em reais (testado em prod: priceMin=24.88 = R$ 24,88)
-  // Anteriormente assumi 10^-5 baseado em doc desatualizada - estava errado
-  const salePrice = p.priceMin;
-  const discount = p.priceDiscountRate > 0 ? p.priceDiscountRate : null;
+  // Shopee API as vezes retorna numericos como string (priceMin="15.49", ratingStar="4.7")
+  // Forcar Number() em tudo - Prisma exige Float, nao aceita string
+  const salePrice = Number(p.priceMin);
+  const rateDiscount = Number(p.priceDiscountRate);
+  const ratingStar = Number(p.ratingStar);
+  const salesCount = Number(p.sales);
+
+  const discount = rateDiscount > 0 ? Math.round(rateDiscount) : null;
   const originalPrice = discount
     ? Math.round((salePrice / (1 - discount / 100)) * 100) / 100
     : null;
@@ -24,8 +28,8 @@ export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct
     permalink: p.productLink,
     freeShipping: false, // Shopee nao expoe esse campo direto
     seller: p.shopName,
-    soldCount: p.sales,
-    rating: p.ratingStar > 0 ? p.ratingStar : null,
+    soldCount: Number.isFinite(salesCount) ? salesCount : null,
+    rating: ratingStar > 0 ? ratingStar : null,
     category: null, // Shopee productOfferV2 nao expoe categoria - pode ser puxado de outra query depois
   };
 }
