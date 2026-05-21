@@ -9,12 +9,22 @@ import { log } from '../logs/app-logger';
 import type { Campaign, WhatsAppGroup } from '@prisma/client';
 
 /**
- * Verifica se o link e o "oficial" gerado pelo painel ML
- * (meli.la/XXX, /sec/XXX, /social/XXX).
- * Links manuais com matt_word sao considerados fallback.
+ * Verifica se o link e "oficial" (apto pra afiliacao com tracking correto).
+ *
+ * ML: gerado pelo painel ML (meli.la/XXX, /sec/XXX, /social/XXX).
+ *     Links com matt_word manual sao considerados fallback (nao oficial).
+ *
+ * Shopee: a API Affiliate ja retorna offerLink/permalink com tag de afiliado
+ *         embutida (productOfferV2). Qualquer link shopee.com.br ou
+ *         s.shopee.com.br vindo da nossa integracao oficial e valido.
  */
-function isOfficialAffiliateLink(url: string | null | undefined): boolean {
+function isOfficialAffiliateLink(url: string | null | undefined, provider?: 'ml' | 'shopee'): boolean {
   if (!url) return false;
+  // Shopee: API oficial sempre retorna link de afiliado pronto
+  if (provider === 'shopee') {
+    return /shopee\.com\.br/i.test(url) || /s\.shopee\.com\.br/i.test(url);
+  }
+  // ML: precisa ser meli.la, /sec/ ou /social/
   return /meli\.la\//i.test(url) || /\/sec\//i.test(url) || /\/social\//i.test(url);
 }
 
@@ -241,18 +251,26 @@ export class CampaignService {
       provider,
     );
 
-    if (products.length === 0) return { sent: 0, failed: 0 };
+    if (products.length === 0) {
+      console.log(`[TEST] fetchAndFilter retornou 0 produtos (keyword: "${keyword}", provider: ${provider})`);
+      console.log(`[TEST] Causa provavel: todos ja foram enviados a este grupo OU filtros muito restritivos`);
+      return { sent: 0, failed: 0 };
+    }
 
     // Se REQUIRE_OFFICIAL_LINK estiver ligado, filtra produtos sem link oficial
     const eligible = REQUIRE_OFFICIAL_LINK
-      ? products.filter((p) => isOfficialAffiliateLink(p.affiliateUrl))
+      ? products.filter((p) => isOfficialAffiliateLink(p.affiliateUrl, provider))
       : products;
 
     if (eligible.length === 0) {
-      console.log('[TEST] Nenhum produto com link oficial - todos cairam no fallback matt_word');
+      const linkSample = products[0]?.affiliateUrl?.slice(0, 80);
+      console.log(`[TEST] Nenhum produto passou em REQUIRE_OFFICIAL_LINK (provider=${provider})`);
+      console.log(`[TEST] Link rejeitado (exemplo): ${linkSample}`);
       log.warn('campaign', '[TESTE] Nenhum produto com link oficial', {
         campaignId: campaign.id,
+        provider,
         triedProducts: products.length,
+        linkSample,
         REQUIRE_OFFICIAL_LINK,
       });
       return { sent: 0, failed: 0 };
@@ -336,11 +354,12 @@ export class CampaignService {
       return { sent: 0, failed: 0 };
     }
 
-    // Se REQUIRE_OFFICIAL_LINK ativado, filtra produtos sem link oficial (meli.la/sec/social)
+    // Se REQUIRE_OFFICIAL_LINK ativado, filtra produtos sem link oficial
+    // (ML: meli.la/sec/social, Shopee: shopee.com.br/s.shopee.com.br)
     const eligibleProducts = REQUIRE_OFFICIAL_LINK
       ? products.filter((p) => {
-          const ok = isOfficialAffiliateLink(p.affiliateUrl);
-          if (!ok) console.log(`[CAMPAIGN] Descartado (sem link oficial): ${p.title?.slice(0, 60)}`);
+          const ok = isOfficialAffiliateLink(p.affiliateUrl, provider);
+          if (!ok) console.log(`[CAMPAIGN] Descartado (sem link oficial, provider=${provider}): ${p.title?.slice(0, 60)}`);
           return ok;
         })
       : products;
