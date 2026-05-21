@@ -34,6 +34,49 @@ async function bootstrap() {
 
   // ─── Rotas públicas ───────────────────────────────────────────────────────────
   app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
+
+  // Diagnostico publico: testar Shopee API sem precisar de JWT (uso: dashboard, debug via navegador)
+  app.get('/health/test-shopee', async (req, res) => {
+    try {
+      const { shopeeService } = await import('./modules/shopee/shopee.service');
+      const { shopeeClient } = await import('./modules/shopee/shopee.client');
+      const q = (req.query.q as string) || 'fone bluetooth';
+
+      if (!shopeeClient.enabled) {
+        return res.status(503).json({
+          error: 'Shopee desativado',
+          reason: 'Faltam SHOPEE_APP_ID e/ou SHOPEE_APP_SECRET no Railway',
+          howToFix: 'Configure as duas env vars em Railway > Variables e faca redeploy',
+        });
+      }
+
+      const products = await shopeeService.searchProducts(q, 5);
+      res.json({
+        query: q,
+        count: products.length,
+        products: products.map((p) => ({
+          title: p.productName,
+          priceMin: p.priceMin / 100000, // Shopee usa preco em 10^-5
+          priceMax: p.priceMax / 100000,
+          discount: p.priceDiscountRate,
+          thumbnail: p.imageUrl,
+          offerLink: p.offerLink,
+          shopName: p.shopName,
+          sales: p.sales,
+        })),
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        error: err.message,
+        hint: err.message?.includes('signature') || err.message?.includes('auth')
+          ? 'Provavelmente SHOPEE_APP_SECRET incorreto'
+          : err.message?.includes('Cannot query')
+          ? 'Schema GraphQL Shopee mudou - reportar bug'
+          : undefined,
+      });
+    }
+  });
+
   app.use('/auth', authRouter);
   app.use('/auth/ml', mlOAuthRouter); // OAuth do Mercado Livre (publica - precisa redirect funcionar)
 
