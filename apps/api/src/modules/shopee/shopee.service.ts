@@ -69,7 +69,17 @@ class ShopeeService {
       console.log(`[SHOPEE] "${keyword}" -> ${products.length} produtos`);
       return products;
     } catch (err: any) {
-      log.error('crawler', `Shopee API falhou: ${err?.message?.slice(0, 100)}`, { keyword });
+      const msg = err?.message || String(err);
+      console.error(`[SHOPEE] Falha "${keyword}" (limit=${limit}):`, msg.slice(0, 200));
+      log.error('crawler', `Shopee API falhou: ${msg.slice(0, 100)}`, {
+        keyword,
+        limit,
+        hint: msg.includes('System Error')
+          ? 'Talvez limit muito baixo (Shopee exige >=10)'
+          : msg.includes('signature') || msg.includes('Credential')
+          ? 'Credencial Shopee invalida - reconferir SHOPEE_APP_SECRET'
+          : undefined,
+      });
       return [];
     }
   }

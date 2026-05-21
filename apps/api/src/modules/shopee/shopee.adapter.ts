@@ -34,11 +34,20 @@ export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct
  * Busca produtos no Shopee com mesma interface do ML.
  * Retorna no formato unificado pra reuso do pipeline.
  */
+/**
+ * Shopee API tem um minimo de produtos por request (testado: limit=1 retorna
+ * "System Error" code 10000). Sempre buscamos batch de 20 e fatiamos depois.
+ * Bonus: como busca 20 e filtra pra N, fica mais provavel achar produto com
+ * bom desconto / dentro do faixa de preco configurada.
+ */
+const SHOPEE_API_MIN_BATCH = 20;
+
 export async function searchShopeeNormalized(params: MLSearchParams): Promise<MLNormalizedProduct[]> {
   const keyword = params.query?.trim();
   if (!keyword) return [];
 
-  const raw = await shopeeService.searchProducts(keyword, params.limit ?? 20);
+  // SEMPRE busca 20 (minimo aceito pela API) - depois corta pra params.limit
+  const raw = await shopeeService.searchProducts(keyword, SHOPEE_API_MIN_BATCH);
 
   // Aplica filtros do params
   const normalized = raw.map(shopeeProductToNormalized).filter((p) => {
@@ -49,8 +58,13 @@ export async function searchShopeeNormalized(params: MLSearchParams): Promise<ML
     return true;
   });
 
-  console.log(`[SHOPEE-ADAPTER] "${keyword}" -> ${raw.length} raw, ${normalized.length} apos filtros`);
-  return normalized;
+  // Fatia pelo limit pedido (default: retorna todos os filtrados)
+  const limited = params.limit ? normalized.slice(0, params.limit) : normalized;
+
+  console.log(
+    `[SHOPEE-ADAPTER] "${keyword}" -> ${raw.length} raw, ${normalized.length} apos filtros, ${limited.length} apos limit(${params.limit ?? 'all'})`,
+  );
+  return limited;
 }
 
 /**
