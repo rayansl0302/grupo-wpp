@@ -292,7 +292,12 @@ export default function History() {
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ products: 0, coupons: 0 });
   const [typeFilter, setTypeFilter] = useState<'all' | 'product' | 'coupon'>('all');
+  const [providerFilter, setProviderFilter] = useState<'all' | 'ml' | 'shopee'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const filteredItems = providerFilter === 'all'
+    ? items
+    : items.filter((it) => it.provider === providerFilter);
 
   const load = async (p: number) => {
     const res = await dashApi.history(p, typeFilter === 'all' ? undefined : typeFilter);
@@ -314,25 +319,49 @@ export default function History() {
       {selectedId && <ProductDetailModal id={selectedId} onClose={() => setSelectedId(null)} />}
 
       {/* Filtros de tipo */}
-      <div className="flex gap-2 text-sm">
-        <button
-          onClick={() => { setTypeFilter('all'); setPage(1); }}
-          className={`px-3 py-1.5 rounded-md ${typeFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-        >
-          Todos ({counts.products + counts.coupons})
-        </button>
-        <button
-          onClick={() => { setTypeFilter('product'); setPage(1); }}
-          className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'product' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-        >
-          <Package size={12} /> Produtos ({counts.products})
-        </button>
-        <button
-          onClick={() => { setTypeFilter('coupon'); setPage(1); }}
-          className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'coupon' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-        >
-          <Ticket size={12} /> Cupons ({counts.coupons})
-        </button>
+      <div className="space-y-2">
+        <div className="flex gap-2 text-sm items-center">
+          <span className="text-xs text-gray-500 w-16">Tipo:</span>
+          <button
+            onClick={() => { setTypeFilter('all'); setPage(1); }}
+            className={`px-3 py-1.5 rounded-md ${typeFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            Todos ({counts.products + counts.coupons})
+          </button>
+          <button
+            onClick={() => { setTypeFilter('product'); setPage(1); }}
+            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'product' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            <Package size={12} /> Produtos ({counts.products})
+          </button>
+          <button
+            onClick={() => { setTypeFilter('coupon'); setPage(1); }}
+            className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 ${typeFilter === 'coupon' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            <Ticket size={12} /> Cupons ({counts.coupons})
+          </button>
+        </div>
+        <div className="flex gap-2 text-sm items-center">
+          <span className="text-xs text-gray-500 w-16">Origem:</span>
+          <button
+            onClick={() => setProviderFilter('all')}
+            className={`px-3 py-1.5 rounded-md ${providerFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            Todas
+          </button>
+          <button
+            onClick={() => setProviderFilter('ml')}
+            className={`px-3 py-1.5 rounded-md ${providerFilter === 'ml' ? 'bg-yellow-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            🟡 Mercado Livre
+          </button>
+          <button
+            onClick={() => setProviderFilter('shopee')}
+            className={`px-3 py-1.5 rounded-md ${providerFilter === 'shopee' ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+          >
+            🟠 Shopee
+          </button>
+        </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -347,7 +376,7 @@ export default function History() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {items.map((it) => (
+            {filteredItems.map((it) => (
               <tr
                 key={it.id}
                 onClick={() => setSelectedId(it.id)}
@@ -366,6 +395,16 @@ export default function History() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
+                        {it.provider === 'shopee' && (
+                          <span className="text-[10px] bg-orange-900/40 text-orange-300 px-1.5 py-0.5 rounded" title="Shopee">
+                            🟠 Shopee
+                          </span>
+                        )}
+                        {it.provider === 'ml' && it.type === 'product' && (
+                          <span className="text-[10px] bg-yellow-900/30 text-yellow-200 px-1.5 py-0.5 rounded" title="Mercado Livre">
+                            🟡 ML
+                          </span>
+                        )}
                         {it.type === 'coupon' && (
                           <span className="text-[10px] bg-yellow-900/40 text-yellow-300 px-1.5 py-0.5 rounded">CUPOM</span>
                         )}

@@ -43,7 +43,7 @@ dashboardRouter.get('/history', async (req, res) => {
       take: limit * page,
       orderBy: { sentAt: 'desc' },
       include: {
-        product: { select: { title: true, salePrice: true, discount: true, thumbnail: true } },
+        product: { select: { title: true, salePrice: true, discount: true, thumbnail: true, provider: true } },
         group: { select: { name: true } },
         campaign: { select: { name: true } },
       },
@@ -80,6 +80,7 @@ dashboardRouter.get('/history', async (req, res) => {
     ...(posts as any[]).map((p) => ({
       id: p.id,
       type: 'product' as const,
+      provider: (p.product?.provider || 'ml') as 'ml' | 'shopee',
       sentAt: p.sentAt,
       status: p.status,
       error: p.error,
@@ -93,6 +94,7 @@ dashboardRouter.get('/history', async (req, res) => {
     ...(coupons as any[]).map((c) => ({
       id: c.id,
       type: 'coupon' as const,
+      provider: 'ml' as 'ml' | 'shopee', // cupons hoje só são do ML
       sentAt: c.sentAt,
       status: c.status,
       error: c.error,

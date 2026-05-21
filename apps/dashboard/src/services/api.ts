@@ -46,6 +46,7 @@ export interface SentPost {
 export interface HistoryItem {
   id: string;
   type: 'product' | 'coupon';
+  provider: 'ml' | 'shopee';
   sentAt: string;
   status: string;
   error: string | null;
