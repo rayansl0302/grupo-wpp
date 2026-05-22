@@ -61,10 +61,13 @@ async function bootstrap() {
           priceMax: Number(p.priceMax),
           discount: Number(p.priceDiscountRate),
           thumbnail: p.imageUrl,
-          offerLink: p.offerLink,
+          // Dois links: o publico (sem tracking) e o de afiliado (COM seu af_id)
+          productLink: p.productLink, // sem tracking
+          offerLink: p.offerLink,     // COM tracking - este vai pro WhatsApp
           shopName: p.shopName,
           sales: Number(p.sales),
         })),
+        _note: 'O link enviado no WhatsApp e o "offerLink" (s.shopee.com.br/XXX) com seu af_id. Teste em aba anonima.',
       });
     } catch (err: any) {
       res.status(500).json({

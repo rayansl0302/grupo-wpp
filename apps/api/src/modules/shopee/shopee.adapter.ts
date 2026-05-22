@@ -18,6 +18,12 @@ export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct
     ? Math.round((salePrice / (1 - discount / 100)) * 100) / 100
     : null;
 
+  // CRITICO PRA AFILIACAO: usar offerLink (s.shopee.com.br/XXX) que JA TEM o tracking
+  // do seu afiliado embutido. O productLink (shopee.com.br/product/X/Y) e o link publico
+  // SEM tracking - se enviar esse, voce NAO ganha comissao.
+  // Fallback: se por algum motivo offerLink vier vazio, usa productLink (ruim, mas melhor que nada).
+  const affiliateLink = p.offerLink || p.productLink;
+
   return {
     mlId: `SHOPEE-${p.shopId}-${p.itemId}`,
     title: p.productName,
@@ -25,7 +31,7 @@ export function shopeeProductToNormalized(p: ShopeeProduct): MLNormalizedProduct
     salePrice,
     discount,
     thumbnail: p.imageUrl,
-    permalink: p.productLink,
+    permalink: affiliateLink,
     freeShipping: false, // Shopee nao expoe esse campo direto
     seller: p.shopName,
     soldCount: Number.isFinite(salesCount) ? salesCount : null,
