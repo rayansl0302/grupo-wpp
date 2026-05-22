@@ -1,14 +1,25 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Megaphone, Users, History,
+  LayoutDashboard, Users, History,
   Settings, LogOut, Zap, Plug, FileText, Ticket,
+  ShoppingBag, ShoppingCart,
 } from 'lucide-react';
 
 interface Props { onLogout: () => void }
 
-const links = [
+// Links "flat" no topo
+const topLinks = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/campaigns', label: 'Campanhas', icon: Megaphone },
+];
+
+// Subitens de Campanhas (agrupados visualmente)
+const campaignLinks = [
+  { to: '/campaigns/ml', label: 'Mercado Livre', icon: ShoppingCart, accent: 'text-yellow-400' },
+  { to: '/campaigns/shopee', label: 'Shopee', icon: ShoppingBag, accent: 'text-orange-400' },
+];
+
+// Links "flat" abaixo
+const bottomLinks = [
   { to: '/groups', label: 'Grupos', icon: Users },
   { to: '/coupons', label: 'Cupons', icon: Ticket },
   { to: '/history', label: 'Histórico', icon: History },
@@ -16,6 +27,14 @@ const links = [
   { to: '/logs', label: 'Logs', icon: FileText },
   { to: '/settings', label: 'Configurações', icon: Settings },
 ];
+
+function navLinkClass({ isActive }: { isActive: boolean }) {
+  return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+    isActive
+      ? 'bg-brand-600/20 text-brand-500'
+      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+  }`;
+}
 
 export function Sidebar({ onLogout }: Props) {
   return (
@@ -27,25 +46,36 @@ export function Sidebar({ onLogout }: Props) {
         </div>
         <div>
           <p className="font-bold text-white text-sm leading-none">WPP Bot</p>
-          <p className="text-xs text-gray-500 mt-0.5">Afiliados ML</p>
+          <p className="text-xs text-gray-500 mt-0.5">Afiliados</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1">
-        {links.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-600/20 text-brand-500'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`
-            }
-          >
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {topLinks.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} end={to === '/'} className={navLinkClass}>
+            <Icon size={17} />
+            {label}
+          </NavLink>
+        ))}
+
+        {/* Grupo Campanhas */}
+        <div className="pt-3 pb-1">
+          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+            Campanhas
+          </p>
+        </div>
+        {campaignLinks.map(({ to, label, icon: Icon, accent }) => (
+          <NavLink key={to} to={to} className={navLinkClass}>
+            <Icon size={17} className={accent} />
+            {label}
+          </NavLink>
+        ))}
+
+        {/* Resto flat */}
+        <div className="pt-3" />
+        {bottomLinks.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} className={navLinkClass}>
             <Icon size={17} />
             {label}
           </NavLink>

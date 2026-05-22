@@ -18,7 +18,10 @@ function Layout({ onLogout }: { onLogout: () => void }) {
       <main className="flex-1 overflow-auto">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/campaigns" element={<Campaigns />} />
+          {/* Campanhas separadas por marketplace */}
+          <Route path="/campaigns" element={<Navigate to="/campaigns/ml" replace />} />
+          <Route path="/campaigns/ml" element={<Campaigns pageProvider="ml" />} />
+          <Route path="/campaigns/shopee" element={<Campaigns pageProvider="shopee" />} />
           <Route path="/groups" element={<Groups />} />
           <Route path="/history" element={<History />} />
           <Route path="/services" element={<Services />} />

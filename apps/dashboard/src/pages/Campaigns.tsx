@@ -41,7 +41,12 @@ const EMPTY_FORM = {
   groupIds: [] as string[],
 };
 
-export default function Campaigns() {
+interface CampaignsProps {
+  /** Se setado, filtra campanhas pelo provider e trava o form pra criar so desse provider */
+  pageProvider?: 'ml' | 'shopee';
+}
+
+export default function Campaigns({ pageProvider }: CampaignsProps = {}) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -123,10 +128,16 @@ export default function Campaigns() {
     }
   };
 
+  // ─── Filtrar campanhas pelo provider da pagina (quando aplicavel) ─────────
+  const visibleCampaigns = pageProvider
+    ? campaigns.filter((c) => (c.provider || 'ml') === pageProvider)
+    : campaigns;
+
   // ─── Abrir form (novo OU edicao) ──────────────────────────────────────────
   const handleNew = () => {
     load();
-    setForm(EMPTY_FORM);
+    // Se a pagina e dedicada a um provider, ja seta no form
+    setForm({ ...EMPTY_FORM, provider: pageProvider ?? 'ml' });
     setEditingId(null);
     setFormError(null);
     setShowForm(true);
@@ -204,8 +215,17 @@ export default function Campaigns() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Campanhas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{campaigns.length} campanhas cadastradas</p>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            {pageProvider === 'ml' && <span className="text-2xl">🟡</span>}
+            {pageProvider === 'shopee' && <span className="text-2xl">🟠</span>}
+            Campanhas
+            {pageProvider === 'ml' && <span className="text-yellow-400">Mercado Livre</span>}
+            {pageProvider === 'shopee' && <span className="text-orange-400">Shopee</span>}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {visibleCampaigns.length} campanha{visibleCampaigns.length === 1 ? '' : 's'}
+            {pageProvider ? ` ${pageProvider === 'ml' ? 'do Mercado Livre' : 'da Shopee'}` : ' cadastradas'}
+          </p>
         </div>
         <button onClick={showForm ? handleCloseForm : handleNew} className="btn-primary flex items-center gap-2">
           <Plus size={15} />
@@ -259,11 +279,19 @@ export default function Campaigns() {
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5">Fonte (Marketplace)</label>
-              <select className="input" value={form.provider}
-                onChange={(e) => setForm({ ...form, provider: e.target.value as NonNullable<Campaign['provider']> })}>
-                <option value="ml">🟡 Mercado Livre</option>
-                <option value="shopee">🟠 Shopee</option>
-              </select>
+              {pageProvider ? (
+                // Pagina dedicada: provider fixo, mostra so como info (nao editavel)
+                <div className="input flex items-center gap-2 cursor-not-allowed opacity-80">
+                  {pageProvider === 'ml' ? '🟡 Mercado Livre' : '🟠 Shopee'}
+                  <span className="text-[10px] text-gray-500 ml-auto">(fixo nesta página)</span>
+                </div>
+              ) : (
+                <select className="input" value={form.provider}
+                  onChange={(e) => setForm({ ...form, provider: e.target.value as NonNullable<Campaign['provider']> })}>
+                  <option value="ml">🟡 Mercado Livre</option>
+                  <option value="shopee">🟠 Shopee</option>
+                </select>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 {form.provider === 'shopee' && 'Requer SHOPEE_APP_ID + SHOPEE_APP_SECRET no Railway'}
                 {form.provider === 'ml' && 'Mercado Livre - via scraping com proxy BR'}
@@ -379,7 +407,7 @@ export default function Campaigns() {
 
       {/* Lista de campanhas */}
       <div className="space-y-3">
-        {campaigns.map((c) => {
+        {visibleCampaigns.map((c) => {
           const provider = (c.provider || 'ml') as 'ml' | 'shopee';
           const contentType = c.contentType || 'product';
           return (
@@ -453,8 +481,12 @@ export default function Campaigns() {
             </div>
           );
         })}
-        {campaigns.length === 0 && (
-          <p className="text-center text-gray-600 py-10">Nenhuma campanha. Crie uma acima.</p>
+        {visibleCampaigns.length === 0 && (
+          <p className="text-center text-gray-600 py-10">
+            {pageProvider
+              ? `Nenhuma campanha ${pageProvider === 'ml' ? 'do Mercado Livre' : 'da Shopee'} ainda. Crie uma acima.`
+              : 'Nenhuma campanha. Crie uma acima.'}
+          </p>
         )}
       </div>
     </div>
