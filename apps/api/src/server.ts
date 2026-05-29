@@ -21,15 +21,47 @@ async function bootstrap() {
   const app = express();
 
   // ─── Middlewares globais ─────────────────────────────────────────────────────
-  // CORS: aceita qualquer origem por padrao (dev ou prod com "*"); pode restringir via CORS_ORIGIN
+  // CORS: smart resolver
+  // - default (sem env): aceita qualquer origem (modo permissivo)
+  // - CORS_ORIGIN=*: idem
+  // - CORS_ORIGIN=url1,url2: lista exata + *.vercel.app + localhost (sempre liberados)
   const corsEnv = (process.env.CORS_ORIGIN ?? '*').trim();
-  const corsConfig = corsEnv === '*'
-    ? { origin: true, credentials: false } // aceita qualquer origem (sem credentials, browser exige isso)
-    : { origin: corsEnv.split(',').map((s) => s.trim()), credentials: true };
-  app.use(cors(corsConfig));
+  const allowedExact = corsEnv === '*' ? null : corsEnv.split(',').map((s) => s.trim()).filter(Boolean);
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Requests sem origin (curl, server-to-server, mobile) -> permite
+      if (!origin) return callback(null, true);
+
+      // Modo permissivo (default): aceita tudo
+      if (!allowedExact) return callback(null, true);
+
+      // Match exato com lista do env
+      if (allowedExact.includes(origin)) return callback(null, true);
+
+      // Vercel previews/production - resolve renames e preview deploys automaticamente
+      if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return callback(null, true);
+
+      // Localhost pra dev
+      if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+
+      // Rejeita + log pra debug
+      console.warn(`[CORS] Origin rejeitada: ${origin}`);
+      callback(new Error(`CORS: origin nao permitida (${origin})`));
+    },
+    // credentials false em modo permissivo (browser exige), true em modo restrito
+    credentials: allowedExact !== null,
+  }));
+
   app.use(express.json());
+  // Rate limit ignora /health e /auth/login pra evitar bloquear painel quando ha muitos requests
   app.use(
-    rateLimit({ windowMs: 60_000, max: 100, message: { error: 'Rate limit excedido' } }),
+    rateLimit({
+      windowMs: 60_000,
+      max: 100,
+      message: { error: 'Rate limit excedido' },
+      skip: (req) => req.path === '/health' || req.path === '/auth/login',
+    }),
   );
 
   // ─── Rotas públicas ───────────────────────────────────────────────────────────
